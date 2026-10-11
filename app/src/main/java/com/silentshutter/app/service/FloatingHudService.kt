@@ -101,6 +101,7 @@ class FloatingHudService : Service() {
         var initialTouchX = 0f
         var initialTouchY = 0f
         var hasMoved = false
+        var touchDownTime = 0L
 
         imageView.setOnTouchListener { _, event ->
             when (event.action) {
@@ -110,12 +111,13 @@ class FloatingHudService : Service() {
                     initialTouchX = event.rawX
                     initialTouchY = event.rawY
                     hasMoved = false
+                    touchDownTime = System.currentTimeMillis()
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
                     val dx = (event.rawX - initialTouchX).toInt()
                     val dy = (event.rawY - initialTouchY).toInt()
-                    if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+                    if (Math.abs(dx) > 12 || Math.abs(dy) > 12) {
                         hasMoved = true
                     }
                     params.x = initialX + dx
@@ -125,7 +127,17 @@ class FloatingHudService : Service() {
                 }
                 MotionEvent.ACTION_UP -> {
                     if (!hasMoved) {
-                        ShutterMuteManager.toggleInstantMute()
+                        val duration = System.currentTimeMillis() - touchDownTime
+                        if (duration > 450) {
+                            // Long-press: Launch zero-sound camera
+                            val camIntent = Intent(this, com.silentshutter.app.camera.SilentCameraActivity::class.java).apply {
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            startActivity(camIntent)
+                        } else {
+                            // Tap: Toggle instant mute
+                            ShutterMuteManager.toggleInstantMute()
+                        }
                     }
                     true
                 }

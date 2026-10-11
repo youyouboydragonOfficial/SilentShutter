@@ -38,6 +38,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PowerSettingsNew
@@ -105,7 +106,10 @@ class MainActivity : ComponentActivity() {
                     onOpenAccessibilitySettings = { openAccessibilitySettings() },
                     onOpenDndSettings = { openDndSettings() },
                     onOpenOverlaySettings = { openOverlaySettings() },
-                    onToggleFloatingHud = { enabled -> toggleFloatingHudService(enabled) }
+                    onToggleFloatingHud = { enabled -> toggleFloatingHudService(enabled) },
+                    onLaunchSilentCamera = {
+                        startActivity(Intent(this, com.silentshutter.app.camera.SilentCameraActivity::class.java))
+                    }
                 )
             }
         }
@@ -169,7 +173,8 @@ fun MainDashboardScreen(
     onOpenAccessibilitySettings: () -> Unit,
     onOpenDndSettings: () -> Unit,
     onOpenOverlaySettings: () -> Unit,
-    onToggleFloatingHud: (Boolean) -> Unit
+    onToggleFloatingHud: (Boolean) -> Unit,
+    onLaunchSilentCamera: () -> Unit
 ) {
     val isMasterEnabled by ShutterMuteManager.isMasterEnabled.collectAsState()
     val isCurrentlyMuted by ShutterMuteManager.isCurrentlyMuted.collectAsState()
@@ -214,6 +219,11 @@ fun MainDashboardScreen(
                     isMuted = isCurrentlyMuted,
                     onToggle = { ShutterMuteManager.setMasterEnabled(!isMasterEnabled) }
                 )
+            }
+
+            // Zero-Sound Hardware Camera Card (Guaranteed 0dB for all devices)
+            item {
+                CyberSilentCameraCard(onLaunch = onLaunchSilentCamera)
             }
 
             // Engine Status & Permission Radar Card
@@ -463,6 +473,97 @@ fun MegaPowerSwitch(
                 color = if (isEnabled) TextPrimary else TextSecondary,
                 textAlign = TextAlign.Center
             )
+        }
+    }
+}
+
+@Composable
+fun CyberSilentCameraCard(
+    onLaunch: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = CyberCard),
+        shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(1.5.dp, NeonCyan.copy(alpha = 0.6f))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.CameraAlt,
+                        contentDescription = null,
+                        tint = NeonCyan,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = "ZERO-SOUND CAMERA",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Black,
+                        color = NeonCyan,
+                        letterSpacing = 1.sp
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(NeonGreen.copy(alpha = 0.15f))
+                        .border(1.dp, NeonGreen, RoundedCornerShape(12.dp))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = "100% 0dB",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = NeonGreen,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Text(
+                text = "Pixel・Xperia等の国内仕様端末でもOSの制限を受けず、CameraXにより100%完全無音で高画質撮影できる内蔵サイバーカメラです。(Pictures/SilentShutter に自動保存)",
+                fontSize = 12.sp,
+                color = TextSecondary,
+                lineHeight = 18.sp
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Button(
+                onClick = onLaunch,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = NeonCyan,
+                    contentColor = CyberBg
+                ),
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    imageVector = Icons.Default.CameraAlt,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "完全無音カメラを起動",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 1.sp
+                )
+            }
         }
     }
 }
