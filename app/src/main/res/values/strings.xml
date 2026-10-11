@@ -1,0 +1,6 @@
+<resources>
+    <string name="app_name">SilentShutter</string>
+    <string name="accessibility_service_label">SilentShutter Camera Mute Engine</string>
+    <string name="accessibility_service_description">カメラアプリの起動をリアルタイムに検知し、一時的にシャッター音・通知音・システム音を無音化します。カメラを閉じると自動的に元の音量に戻ります。</string>
+    <string name="tile_label">SilentShutter</string>
+</resources>
