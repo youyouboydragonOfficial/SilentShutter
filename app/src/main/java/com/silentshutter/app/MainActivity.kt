@@ -219,6 +219,7 @@ fun MainDashboardScreen(
     onLaunchDefaultCamera: () -> Unit
 ) {
     val isMasterEnabled by ShutterMuteManager.isMasterEnabled.collectAsState()
+    val isHibernated by ShutterMuteManager.isHibernated.collectAsState()
     val isAlwaysForceMute by ShutterMuteManager.isAlwaysForceMute.collectAsState()
     val isAudioHijackEnabled by ShutterMuteManager.isAudioHijackEnabled.collectAsState()
     val isShutterTapInterceptEnabled by ShutterMuteManager.isShutterTapInterceptEnabled.collectAsState()
@@ -274,7 +275,17 @@ fun MainDashboardScreen(
                 CyberHeader(
                     isMasterEnabled = isMasterEnabled,
                     isMuted = isCurrentlyMuted,
+                    isHibernated = isHibernated,
                     onOpenUpdate = { showUpdateDialog = true }
+                )
+            }
+
+            // 💀 Hibernate / Sleep Mode (Action-disabled & Normal Audio Protection)
+            item {
+                HibernateControlCard(
+                    isHibernated = isHibernated,
+                    onShutdown = { ShutterMuteManager.shutdownEngine() },
+                    onWakeUp = { ShutterMuteManager.wakeUpEngine() }
                 )
             }
 
@@ -396,7 +407,7 @@ fun MainDashboardScreen(
             item {
                 Spacer(modifier = Modifier.height(20.dp))
                 Text(
-                    text = "SilentShutter v2.5.0 • Default Camera Shutter Hacker",
+                    text = "SilentShutter v2.6.0 • Default Camera Shutter Hacker",
                     color = TextMuted,
                     fontSize = 12.sp,
                     textAlign = TextAlign.Center,
@@ -523,6 +534,7 @@ fun CyberUpdateRadarCard(
 fun CyberHeader(
     isMasterEnabled: Boolean,
     isMuted: Boolean,
+    isHibernated: Boolean = false,
     onOpenUpdate: () -> Unit
 ) {
     Row(
@@ -568,11 +580,13 @@ fun CyberHeader(
             }
 
             val badgeText = when {
+                isHibernated -> "SLEEP"
                 !isMasterEnabled -> "STANDBY"
                 isMuted -> "HIJACKED"
                 else -> "ARMED"
             }
             val badgeColor = when {
+                isHibernated -> NeonRed
                 !isMasterEnabled -> TextMuted
                 isMuted -> NeonGreen
                 else -> NeonCyan
@@ -1072,13 +1086,15 @@ fun AlwaysForceMuteCard(
     onToggle: (Boolean) -> Unit
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onToggle(!isAlwaysForceMute) },
         colors = CardDefaults.cardColors(
             containerColor = if (isAlwaysForceMute) Color(0x2E00E676) else Color(0x1AFF0055)
         ),
         shape = RoundedCornerShape(20.dp),
         border = BorderStroke(
-            1.5.dp,
+            2.dp,
             if (isAlwaysForceMute) NeonGreen else NeonRed.copy(alpha = 0.8f)
         )
     ) {
@@ -1096,18 +1112,18 @@ fun AlwaysForceMuteCard(
                         imageVector = if (isAlwaysForceMute) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
                         contentDescription = null,
                         tint = if (isAlwaysForceMute) NeonGreen else NeonRed,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(28.dp)
                     )
-                    Spacer(modifier = Modifier.width(10.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
                     Column {
                         Text(
-                            text = if (isAlwaysForceMute) "常時強制無音化 【発動中】" else "常時強制無音化モード (最強消音)",
-                            fontSize = 14.sp,
+                            text = if (isAlwaysForceMute) "🚨 常時強制無音化 【発動中】" else "🚨 常時強制無音化モード (最強消音)",
+                            fontSize = 15.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = if (isAlwaysForceMute) NeonGreen else TextPrimary
                         )
                         Text(
-                            text = if (isAlwaysForceMute) "全オーディオ・シャッター音ストリームを完全封殺中" else "タップしてONにするとカメラの音が100%鳴りません",
+                            text = if (isAlwaysForceMute) "全消音中 • 3分後に自動で通常音声に復元します" else "枠ごとタップで一発切替 (カメラの音を100%封殺)",
                             fontSize = 11.sp,
                             color = if (isAlwaysForceMute) NeonGreen.copy(alpha = 0.9f) else TextSecondary
                         )
@@ -1128,9 +1144,99 @@ fun AlwaysForceMuteCard(
             Spacer(modifier = Modifier.height(10.dp))
             Text(
                 text = if (isAlwaysForceMute)
-                    "✅ 現在、カメラ自動検知に関係なく端末の全強制音（STREAM 7）とスピーカーが完全遮断されています。写真を撮り終えたらOFFにしてください。"
+                    "✅ 現在、端末の全シャッター音を100%遮断中。万が一消し忘れても【3分後に自動で通常音声に復旧】する安全タイマーが作動しています。"
                 else
-                    "💡 「カメラのシャッター音が消えない」「自動検知が効かない」ときは、このスイッチをONにしてください！カメラ起動の検知なしで、端末のシャッター音を物理的に100%確実に消音します。",
+                    "👆 カード枠内のどこをタップしても即座にON/OFFが切り替わります！カメラのシャッター音を物理的に100%確実に消音します。（切り忘れ防止の3分自動復帰機能付き）",
+                fontSize = 11.sp,
+                color = TextSecondary,
+                lineHeight = 16.sp
+            )
+        }
+    }
+}
+
+/**
+ * 💀 Hibernate / Sleep Mode Card (アプリ全体行動不能・通常音声保護)
+ * アプリを使わないときにすべての消音・ハイジャック機能を完全停止し、通常の音声を100%復元・保護する。
+ */
+@Composable
+fun HibernateControlCard(
+    isHibernated: Boolean,
+    onShutdown: () -> Unit,
+    onWakeUp: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable {
+                if (isHibernated) onWakeUp() else onShutdown()
+            },
+        colors = CardDefaults.cardColors(
+            containerColor = if (isHibernated) Color(0x33FF0055) else Color(0x1F2A385B)
+        ),
+        shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(
+            1.8.dp,
+            if (isHibernated) NeonRed else NeonPurple.copy(alpha = 0.7f)
+        )
+    ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = if (isHibernated) Icons.Default.PowerSettingsNew else Icons.Default.Security,
+                        contentDescription = null,
+                        tint = if (isHibernated) NeonRed else NeonPurple,
+                        modifier = Modifier.size(28.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = if (isHibernated) "💀 アプリ行動不能（完全休止中）" else "🛡️ アプリ使わない時: 完全休止",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = if (isHibernated) NeonRed else TextPrimary
+                        )
+                        Text(
+                            text = if (isHibernated) "全消音機能を停止中 • 通常音声 100% 復元保護" else "動画・通話・音楽などの普段の音声を100%保護",
+                            fontSize = 11.sp,
+                            color = if (isHibernated) NeonRed.copy(alpha = 0.9f) else TextSecondary
+                        )
+                    }
+                }
+
+                Button(
+                    onClick = {
+                        if (isHibernated) onWakeUp() else onShutdown()
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isHibernated) NeonGreen else NeonRed.copy(alpha = 0.3f),
+                        contentColor = if (isHibernated) Color.Black else NeonRed
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
+                ) {
+                    Text(
+                        text = if (isHibernated) "🟢 再稼働" else "💀 完全休止",
+                        fontWeight = FontWeight.Black,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(
+                text = if (isHibernated)
+                    "✅ 現在、バックグラウンド監視や消音ハイジャックを含むすべての動作が停止しています。YouTube・音楽・通話・アラーム等、スマホ本来の音はすべて正常に鳴ります。カメラを消音したいときはタップして再稼働させてください。"
+                else
+                    "💡 「使わない時に動画や電話の音が消えたらいやだ」という時はここをタップ！全機能を完全に停止させ、スマホの本来の音声を確実に保護します。",
                 fontSize = 11.sp,
                 color = TextSecondary,
                 lineHeight = 16.sp

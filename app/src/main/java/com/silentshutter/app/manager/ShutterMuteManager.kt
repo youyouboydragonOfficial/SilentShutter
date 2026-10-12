@@ -15,9 +15,14 @@ import android.view.accessibility.AccessibilityManager
 import androidx.core.content.ContextCompat
 import com.silentshutter.app.hack.AudioRoutingHijacker
 import com.silentshutter.app.hack.ShizukuSystemHacker
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -67,9 +72,15 @@ object ShutterMuteManager {
     private lateinit var audioManager: AudioManager
     private lateinit var notificationManager: NotificationManager
 
+    private val scope = CoroutineScope(Dispatchers.Default)
+    private var safetyTimerJob: Job? = null
+
     // Observable UI States
     private val _isMasterEnabled = MutableStateFlow(true)
     val isMasterEnabled: StateFlow<Boolean> = _isMasterEnabled.asStateFlow()
+
+    private val _isHibernated = MutableStateFlow(false)
+    val isHibernated: StateFlow<Boolean> = _isHibernated.asStateFlow()
 
     private val _isAlwaysForceMute = MutableStateFlow(false)
     val isAlwaysForceMute: StateFlow<Boolean> = _isAlwaysForceMute.asStateFlow()
@@ -131,12 +142,11 @@ object ShutterMuteManager {
         // Detect default camera
         detectDefaultCameraPackage()
 
-        // If Always Force Mute was active, engage immediately
+        // If Always Force Mute was active, engage with safety timer
         if (_isMasterEnabled.value && _isAlwaysForceMute.value) {
-            saveAndMuteAudioState()
-            addLog("ALWAYS_MUTE", "Always Force Mute Mode engaged on boot", true)
+            setAlwaysForceMute(true)
         } else {
-            addLog("SYSTEM_INIT", "Supercharged Camera Hacker Engine armed", false)
+            addLog("SYSTEM_INIT", "SilentShutter Engine armed", false)
         }
     }
 
@@ -182,6 +192,37 @@ object ShutterMuteManager {
         }
     }
 
+    /**
+     * 💀 アプリ全体行動不能（完全休止 / COMPLETE SLEEP & RESTORE）
+     * すべての消音・ハイジャック機能を物理停止し、通常の音声を100%復元する。
+     */
+    fun shutdownEngine() {
+        safetyTimerJob?.cancel()
+        safetyTimerJob = null
+
+        _isAlwaysForceMute.value = false
+        _isMasterEnabled.value = false
+        _isHibernated.value = true
+
+        prefs.edit()
+            .putBoolean(KEY_ALWAYS_FORCE_MUTE, false)
+            .putBoolean(KEY_MASTER_ENABLED, false)
+            .apply()
+
+        restoreAudioState()
+        addLog("SHUTDOWN", "💀 アプリ完全行動不能 (休止中): 通常の音声を100%復元しました", false)
+    }
+
+    /**
+     * 🟢 休止状態からの復旧・再稼働
+     */
+    fun wakeUpEngine() {
+        _isHibernated.value = false
+        _isMasterEnabled.value = true
+        prefs.edit().putBoolean(KEY_MASTER_ENABLED, true).apply()
+        addLog("WAKE_UP", "🟢 アプリ再稼働: カメラ監視エンジンが再起動しました", false)
+    }
+
     fun setMasterEnabled(enabled: Boolean) {
         _isMasterEnabled.value = enabled
         prefs.edit().putBoolean(KEY_MASTER_ENABLED, enabled).apply()
@@ -192,17 +233,36 @@ object ShutterMuteManager {
         }
     }
 
+    /**
+     * 常時強制無音化モード (3分安全解除タイマー付き)
+     */
     fun setAlwaysForceMute(enabled: Boolean) {
         _isAlwaysForceMute.value = enabled
         prefs.edit().putBoolean(KEY_ALWAYS_FORCE_MUTE, enabled).apply()
+        safetyTimerJob?.cancel()
+
         if (enabled) {
+            _isHibernated.value = false
+            _isMasterEnabled.value = true
             saveAndMuteAudioState()
-            addLog("ALWAYS_MUTE", "🚨 ALWAYS FORCE MUTE ENABLED (100% Silence Guaranteed)", true)
+            addLog("ALWAYS_MUTE", "🚨 常時強制無音化 ON (安全保護タイマー: 3分)", true)
+
+            // 3分間の安全解除タイマー（消し忘れても動画・電話の音が消えたままにならないよう自動復元）
+            safetyTimerJob = scope.launch {
+                delay(180_000L) // 3分
+                if (_isAlwaysForceMute.value && _activeCameraPackage.value == null) {
+                    _isAlwaysForceMute.value = false
+                    prefs.edit().putBoolean(KEY_ALWAYS_FORCE_MUTE, false).apply()
+                    restoreAudioState()
+                    addLog("SAFETY_RESTORE", "⏰ 安全タイマー: 3分経過のため自動的に通常の音声を復元しました", false)
+                }
+            }
         } else {
+            safetyTimerJob = null
             if (_activeCameraPackage.value == null) {
                 restoreAudioState()
             }
-            addLog("ALWAYS_MUTE", "Always Force Mute disabled (Auto-detection mode)", false)
+            addLog("ALWAYS_MUTE", "常時無音化 OFF (通常の音声を復元)", false)
         }
     }
 
@@ -228,6 +288,7 @@ object ShutterMuteManager {
     }
 
     fun isCameraApp(packageName: String?): Boolean {
+        if (_isHibernated.value) return false
         if (packageName == null) return false
         if (packageName == appContext.packageName) return false
         val targets = _targetPackages.value
@@ -243,11 +304,10 @@ object ShutterMuteManager {
 
     /**
      * Triggered when camera app comes to foreground.
-     * Executes the Audio Routing Hijack to suppress the shutter sound.
      */
     @Synchronized
     fun onCameraOpened(packageName: String) {
-        if (!_isMasterEnabled.value) return
+        if (_isHibernated.value || !_isMasterEnabled.value) return
         _activeCameraPackage.value = packageName
 
         saveAndMuteAudioState()
@@ -256,10 +316,9 @@ object ShutterMuteManager {
 
     /**
      * Triggered when user taps the shutter button inside the camera app.
-     * Emits a supercharged mute pulse without dropping the hijack.
      */
     fun onShutterButtonClicked(viewDesc: String) {
-        if (!_isMasterEnabled.value || !_isShutterTapInterceptEnabled.value) return
+        if (_isHibernated.value || !_isMasterEnabled.value || !_isShutterTapInterceptEnabled.value) return
         AudioRoutingHijacker.triggerShutterPulse()
         _isCurrentlyMuted.value = true
         addLog("SHUTTER_PULSE", "Shutter Click Intercepted [$viewDesc] -> PULSE MUTE", true)
@@ -271,7 +330,6 @@ object ShutterMuteManager {
     @Synchronized
     fun onCameraClosed() {
         if (_isAlwaysForceMute.value) {
-            // Keep muted if Always Force Mute is enabled
             _activeCameraPackage.value = null
             return
         }
@@ -295,8 +353,10 @@ object ShutterMuteManager {
             prefs.edit().putBoolean(KEY_ALWAYS_FORCE_MUTE, false).apply()
             addLog("MANUAL_RESTORE", "Audio state restored", false)
         } else {
+            _isHibernated.value = false
+            _isMasterEnabled.value = true
             saveAndMuteAudioState()
-            addLog("MANUAL_HIJACK", "Manual Audio Hijack activated (STREAM 7 + Earpiece)", true)
+            addLog("MANUAL_HIJACK", "Manual Audio Hijack activated", true)
         }
     }
 

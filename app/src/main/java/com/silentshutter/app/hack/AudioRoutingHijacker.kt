@@ -25,7 +25,7 @@ import kotlinx.coroutines.launch
 import java.lang.reflect.Method
 
 /**
- * Supercharged Hardware Audio Routing Hijacker Engine (v2.5.0 Absolute Silence Edition)
+ * Supercharged Hardware Audio Routing Hijacker Engine (v2.6.0 Silence & Audio Protection Edition)
  *
  * 【完全に音を消すための究極技術】
  * 1. AudioSystem.setMasterMute(true) & setMasterVolume(0.0f):
