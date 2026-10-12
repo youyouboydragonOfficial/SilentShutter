@@ -102,6 +102,8 @@ import com.silentshutter.app.ui.theme.NeonYellow
 import com.silentshutter.app.ui.theme.SilentShutterTheme
 import com.silentshutter.app.ui.theme.TextMuted
 import com.silentshutter.app.ui.theme.TextPrimary
+import androidx.compose.animation.Crossfade
+import com.silentshutter.app.ui.splash.UnitySplashScreen
 import com.silentshutter.app.ui.theme.TextSecondary
 
 class MainActivity : ComponentActivity() {
@@ -110,13 +112,29 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             SilentShutterTheme {
-                MainDashboardScreen(
-                    onOpenAccessibilitySettings = { openAccessibilitySettings() },
-                    onOpenDndSettings = { openDndSettings() },
-                    onOpenOverlaySettings = { openOverlaySettings() },
-                    onToggleFloatingHud = { enabled -> toggleFloatingHudService(enabled) },
-                    onLaunchDefaultCamera = { ShutterMuteManager.launchDefaultCamera() }
-                )
+                var isSplashFinished by remember { mutableStateOf(false) }
+
+                Crossfade(
+                    targetState = isSplashFinished,
+                    animationSpec = tween(400),
+                    label = "SplashCrossfade"
+                ) { finished ->
+                    if (!finished) {
+                        UnitySplashScreen(
+                            onSplashFinished = {
+                                isSplashFinished = true
+                            }
+                        )
+                    } else {
+                        MainDashboardScreen(
+                            onOpenAccessibilitySettings = { openAccessibilitySettings() },
+                            onOpenDndSettings = { openDndSettings() },
+                            onOpenOverlaySettings = { openOverlaySettings() },
+                            onToggleFloatingHud = { enabled -> toggleFloatingHudService(enabled) },
+                            onLaunchDefaultCamera = { ShutterMuteManager.launchDefaultCamera() }
+                        )
+                    }
+                }
             }
         }
     }

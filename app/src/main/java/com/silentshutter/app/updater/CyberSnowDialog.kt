@@ -62,6 +62,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -83,11 +84,13 @@ import kotlin.random.Random
 data class Snowflake(
     var x: Float,
     var y: Float,
-    val radius: Float,
+    val sizeSp: Float,
     val speed: Float,
     val driftSpeed: Float,
+    val rotationSpeed: Float,
+    var rotation: Float,
     val alpha: Float,
-    val color: Color
+    val colorHex: Int
 )
 
 @Composable
@@ -196,22 +199,44 @@ fun CyberSnowUpdateDialog(
 }
 
 /**
- * ❄️ Beautiful Particle Snowfall Canvas
- * Renders smooth falling snow flakes with gentle sine-wave horizontal drift.
+ * ❄️ Authentic ❄ Snowflake Particle Falling Canvas
+ * Renders beautiful ❄ emoji snowflakes with authentic ice-crystal colors,
+ * gentle horizontal sine-wave drift, and soft rotational flutter.
  */
 @Composable
 fun DeepSnowfallCanvas() {
+    val crystalColors = remember {
+        listOf(
+            0xFFF0F9FF.toInt(), // Pure Snow White
+            0xFFBAE6FD.toInt(), // Soft Powder Ice
+            0xFF7DD3FC.toInt(), // Sky Frost Crystal
+            0xFF38BDF8.toInt(), // Vibrant Ice Blue
+            0xFF67E8F9.toInt(), // Luminous Aqua Cyan
+            0xFFE0F7FA.toInt()  // Shimmering Frost
+        )
+    }
+
     val snowflakes = remember {
-        List(90) {
+        List(45) {
             Snowflake(
                 x = Random.nextFloat(),
                 y = Random.nextFloat(),
-                radius = Random.nextFloat() * 3.5f + 1.2f,
-                speed = Random.nextFloat() * 0.0035f + 0.0015f,
+                sizeSp = Random.nextFloat() * 12f + 14f, // 14sp ~ 26sp
+                speed = Random.nextFloat() * 0.0028f + 0.0012f,
                 driftSpeed = Random.nextFloat() * 2f + 1f,
-                alpha = Random.nextFloat() * 0.7f + 0.3f,
-                color = if (Random.nextBoolean()) Color.White else Color(0xFFC7F9FF)
+                rotationSpeed = (Random.nextFloat() - 0.5f) * 1.5f,
+                rotation = Random.nextFloat() * 360f,
+                alpha = Random.nextFloat() * 0.55f + 0.45f,
+                colorHex = crystalColors.random()
             )
+        }
+    }
+
+    val paint = remember {
+        android.graphics.Paint().apply {
+            isAntiAlias = true
+            textAlign = android.graphics.Paint.Align.CENTER
+            typeface = android.graphics.Typeface.DEFAULT
         }
     }
 
@@ -223,6 +248,7 @@ fun DeepSnowfallCanvas() {
                 frameTime = time
                 snowflakes.forEach { flake ->
                     flake.y += flake.speed
+                    flake.rotation += flake.rotationSpeed
                     if (flake.y > 1.05f) {
                         flake.y = -0.05f
                         flake.x = Random.nextFloat()
@@ -236,17 +262,24 @@ fun DeepSnowfallCanvas() {
         val width = size.width
         val height = size.height
         val t = frameTime / 1_000_000_000.0f
+        val nativeCanvas = drawContext.canvas.nativeCanvas
 
         snowflakes.forEach { flake ->
-            val drift = sin((t * flake.driftSpeed + flake.y * 10f).toDouble()).toFloat() * 15f
+            val drift = sin((t * flake.driftSpeed + flake.y * 10f).toDouble()).toFloat() * 18f
             val px = flake.x * width + drift
             val py = flake.y * height
 
-            drawCircle(
-                color = flake.color.copy(alpha = flake.alpha),
-                radius = flake.radius * density,
-                center = Offset(px, py)
-            )
+            val pixelSize = flake.sizeSp * density
+            paint.textSize = pixelSize
+            paint.color = flake.colorHex
+            paint.alpha = (flake.alpha * 255).toInt().coerceIn(0, 255)
+
+            nativeCanvas.save()
+            nativeCanvas.translate(px, py)
+            nativeCanvas.rotate(flake.rotation)
+            // Draw ❄ snowflake emoji centered
+            nativeCanvas.drawText("❄", 0f, pixelSize * 0.35f, paint)
+            nativeCanvas.restore()
         }
     }
 }

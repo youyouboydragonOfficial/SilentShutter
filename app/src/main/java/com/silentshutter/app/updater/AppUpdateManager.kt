@@ -20,7 +20,7 @@ import java.net.URL
 object AppUpdateManager {
 
     private const val TAG = "AppUpdateManager"
-    const val CURRENT_VERSION = "2.1.0"
+    const val CURRENT_VERSION = "2.2.0"
     private const val GITHUB_API_URL = "https://api.github.com/repos/youyouboydragonOfficial/SilentShutter/releases/latest"
 
     sealed class UpdateState {
