@@ -1,61 +1,51 @@
-# 📸 SilentShutter v2.0.0 - Default Camera Shutter Hacker
+# 📸 SilentShutter v2.1.0 - Default Camera Shutter Hacker
 
 [![Release](https://img.shields.io/github/v/release/youyouboydragonOfficial/SilentShutter?color=00F0FF&style=for-the-badge)](https://github.com/youyouboydragonOfficial/SilentShutter/releases)
 [![Android](https://img.shields.io/badge/Android-8.0%2B-00E676?style=for-the-badge&logo=android)](https://github.com/youyouboydragonOfficial/SilentShutter)
 [![License](https://img.shields.io/badge/License-MIT-blueviolet?style=for-the-badge)](LICENSE)
 
-**端末のデフォルト（純正）カメラアプリのシャッター音をハッキング技術で無効化するアプリ**！  
-自作カメラではなく、Google PixelやXperia、Galaxy等にプリインストールされている**普段使っている純正カメラアプリ**のシャッター音をroot化なしで遮断・無音化します。
+**端末のデフォルト（純正）カメラアプリのシャッター音をハッキング技術で徹底消音！**  
+自作カメラではなく、Google PixelやXperia、Galaxy等にプリインストールされている**普段使っている純正カメラアプリ**のシャッター音をroot化なしで消音する専用ハッカーユーティリティ。
 
 ---
 
-## ⚡ デフォルトカメラ無音化ハックの仕組み
+## ❄️ v2.1.0 新機能: アプリ内更新 & 深々と降る雪の演出
 
-日本のAndroid端末ではOSのオーディオ層（`AudioPolicyManager`）に `STREAM_SYSTEM_ENFORCED`（強制システム音）が組み込まれており、通常のマナーモードでは消えません。  
-本アプリは以下の**3大ハッキングモジュール**により、純正カメラのシャッター音を無効化します。
-
-### 1. 🎙️ 通話モード & 排他オーディオストリーム乗っ取り (Audio Route Hijacker)
-- デフォルトカメラが起動した瞬間、OSのオーディオモードを一時的に **`MODE_IN_COMMUNICATION`（通話中モード）** にハイジャック。
-- 同時に無音PCMの排他ストリーム（`AudioTrack`）を最高優先度で占有。
-- 通話中のユーザーの聴覚保護のため、OSのオーディオポリシーはスピーカーへの警告音ルートを抑制・迂回させ、**純正カメラのシャッター音出力をOSレベルで遮断**します。
-- カメラを閉じるとミリ秒単位で通常の音量・モードに自動復元されます。
-
-### 2. ⚡ シャッター操作検知 ミリ秒パルス (Shutter Tap Interceptor)
-- ユーザー補助サービス（Accessibility Service）が、純正カメラ画面内のシャッターボタンのタップ操作をリアルタイム検知。
-- シャッターが切られる瞬間に超高速で消音パルスを送り込み、ピンポイントで音を遮断します。
-
-### 3. 📱 Shizuku & システム設定インジェクター (System Injector)
-- **Shizuku API** に完全対応。Shizukuが稼働していれば、ワンタップでroot不要の特権シェルを実行し、Samsung Galaxy等の純正カメラシャッター音フラグ（CSCキー `csc_pref_camera_forced_shuttersound_key = 0`）を直接書き換えて永久消音！
-- Shizukuがない環境でも、ワイヤレスデバッグ用のワンクリックADBコマンドコピー機能を搭載。
+- **❄️ 深々と降る雪のパーティクル演出 (Snowfall Animation)**:
+  - 更新確認ボタンを押すと、画面いっぱいに美しい雪の結晶がしんしんと舞い落ちる美麗なサイバー演出。
+- **🌀 クールな回転サイバースピナー (Multi-Ring Cyber Spinner)**:
+  - 外側と内側が逆回転するネオンシアン＆エメラルドグリーンの多重リングとパルスコアによる近未来的スピナー。
+- **⏱️ 3秒間の演出保証**:
+  - API通信が一瞬で終わっても、必ず3秒間は読み込み画面と降雪演出を堪能できます。
+- **📲 アプリ内ワンタップ自動更新 (Auto In-App APK Updater)**:
+  - GitHubの最新リリースを自動検知。
+  - アプリ内で直接APKを高速ダウンロードし、進捗バー表示後に端末のインストーラーが自動起動！ブラウザを開く手間を完全に省きます。
 
 ---
 
-## 🚀 主な機能
+## ⚡ 徹底強化されたデフォルトカメラ消音ハック
 
-- **🎯 ターゲット自動検出**:
-  - お使いのスマートフォンのデフォルトカメラ（Google Camera, Samsung Camera, Xperia Camera等）を自動検出し、アプリ内からワンタップで起動してテスト可能。
-- **⚡ メガハックスイッチ (HACK ON / STANDBY)**:
-  - アプリ中央の巨大なネオン発光スイッチで全体をいつでもワンタップON/OFF。
-- **🔮 フローティングHUDボタン**:
-  - 画面端の半透明ネオンHUD。タップで消音トグル、長押し（0.5秒）で純正カメラを直接起動！
-- **🎛️ クイック設定タイル**:
-  - 通知バーのコントロールセンターからワンタップでハックのON/OFF切り替え。
-- **🖥️ リアルタイム・ハックコンソール**:
-  - 純正カメラの検知、オーディオハイジャック、シャッターパルス発動のログがターミナル風にリアルタイムストリーミング。
+1. **🎙️ 全オーディオストリーム強制0 ＆ 受話口（Earpiece）退避ハック (Android 12+)**:
+   - `STREAM_SYSTEM`, `STREAM_NOTIFICATION`, `STREAM_RING`, `STREAM_MUSIC`, `STREAM_ALARM`, `STREAM_DTMF`, `STREAM_VOICE_CALL` の全ストリームを完全ゼロ化＆`ADJUST_MUTE`。
+   - 通話モード（`MODE_IN_COMMUNICATION`）にハイジャックし、オーディオルーティングを外側のスピーカーから**受話口（耳当て部分の微小スピーカー）**へ強制迂回！
+   - 万が一シャッター音が鳴ってもスピーカーから爆音が出るのを物理的・OSレベルで遮断します。
+2. **🔄 音量強制ガードループ (Volume Guard Thread)**:
+   - 純正カメラが起動時にシステム音量を勝手に元に戻そうとする動作を阻止するため、カメラ起動中は毎秒数十回にわたり音量を0に引き戻し続けるガードスレッドを並列稼働！
+3. **⚡ シャッター操作検知 ミリ秒パルス (Shutter Tap Interceptor)**:
+   - 画面内のシャッターボタンが押された瞬間を超高速検知し、瞬時消音パルスを発動。
+4. **📱 Shizuku API による Galaxy CSCキー直接書き換え**:
+   - root不要で `csc_pref_camera_forced_shuttersound_key = 0` を直接注入。
 
 ---
 
 ## 📲 インストール & 使い方
 
-### 1. APKのダウンロード
-[GitHub Releases (v2.0.0)](https://github.com/youyouboydragonOfficial/SilentShutter/releases/tag/v2.0.0) から `SilentShutter-v2.0.0.apk` を直接ダウンロードして端末にインストールしてください。  
+### 1. 初回インストール
+[GitHub Releases (v2.1.0)](https://github.com/youyouboydragonOfficial/SilentShutter/releases/tag/v2.1.0) から `SilentShutter-v2.1.0.apk` を直接ダウンロードして端末にインストールしてください。  
 *(※zipファイルは一切使用しておらず、APKバイナリを直接配布しています)*
 
-### 2. セットアップ
-1. アプリを起動し、「ユーザー補助サービス」と「マナーモード/DND制御権限」を許可。
-2. （Galaxyユーザー / Shizuku利用者の場合）「システム設定を注入」をタップ。
-3. 中央の巨大スイッチを **HACK ON** に設定。
-4. **「デフォルトカメラを起動してテスト」** をタップして、端末の純正カメラを開いて撮影してください！
+### 2. 次回以降のアップデート
+- アプリ内の **「❄️ アプリ内で更新状況を確認する」** またはヘッダー右上の **「❄️ UPDATE」** ボタンを押すだけで、アプリ内で自動更新が完結します！
 
 ---
 

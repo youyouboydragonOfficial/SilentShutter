@@ -89,6 +89,7 @@ import androidx.compose.ui.unit.sp
 import com.silentshutter.app.hack.ShizukuSystemHacker
 import com.silentshutter.app.manager.ShutterMuteManager
 import com.silentshutter.app.service.FloatingHudService
+import com.silentshutter.app.updater.CyberSnowUpdateDialog
 import com.silentshutter.app.ui.theme.CyberBg
 import com.silentshutter.app.ui.theme.CyberCard
 import com.silentshutter.app.ui.theme.CyberCardBorder
@@ -205,6 +206,7 @@ fun MainDashboardScreen(
     var showAdbDialog by remember { mutableStateOf(false) }
     var showAddPkgDialog by remember { mutableStateOf(false) }
     var showTargetList by remember { mutableStateOf(false) }
+    var showUpdateDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         hasDndPermission = ShutterMuteManager.hasDndPermission()
@@ -225,7 +227,8 @@ fun MainDashboardScreen(
             item {
                 CyberHeader(
                     isMasterEnabled = isMasterEnabled,
-                    isMuted = isCurrentlyMuted
+                    isMuted = isCurrentlyMuted,
+                    onOpenUpdate = { showUpdateDialog = true }
                 )
             }
 
@@ -235,6 +238,13 @@ fun MainDashboardScreen(
                     isEnabled = isMasterEnabled,
                     isMuted = isCurrentlyMuted,
                     onToggle = { ShutterMuteManager.setMasterEnabled(!isMasterEnabled) }
+                )
+            }
+
+            // In-App Update Radar Card (Snow animation & cool spinner)
+            item {
+                CyberUpdateRadarCard(
+                    onCheckUpdate = { showUpdateDialog = true }
                 )
             }
 
@@ -354,12 +364,98 @@ fun MainDashboardScreen(
             }
         )
     }
+
+    // In-App Cyber Snow Update Dialog
+    if (showUpdateDialog) {
+        CyberSnowUpdateDialog(
+            onDismiss = { showUpdateDialog = false }
+        )
+    }
+}
+
+@Composable
+fun CyberUpdateRadarCard(
+    onCheckUpdate: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = CyberCard),
+        shape = RoundedCornerShape(18.dp),
+        border = BorderStroke(1.2.dp, NeonPurple.copy(alpha = 0.6f))
+    ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "❄️",
+                        fontSize = 18.sp
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "IN-APP GITHUB UPDATER",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = NeonPurple,
+                        letterSpacing = 1.sp
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(NeonPurple.copy(alpha = 0.2f))
+                        .border(1.dp, NeonPurple, RoundedCornerShape(10.dp))
+                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                ) {
+                    Text(
+                        text = "AUTO-DL",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = NeonPurple,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "GitHubの最新リリースを確認し、アプリ内で直接APKをダウンロードして更新できます。(確認時は3秒間の雪の深々演出＆サイバースピナーが表示されます)",
+                fontSize = 11.sp,
+                color = TextSecondary,
+                lineHeight = 16.sp
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            Button(
+                onClick = onCheckUpdate,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = NeonPurple,
+                    contentColor = TextPrimary
+                ),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "❄️ アプリ内で更新状況を確認する",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp
+                )
+            }
+        }
+    }
 }
 
 @Composable
 fun CyberHeader(
     isMasterEnabled: Boolean,
-    isMuted: Boolean
+    isMuted: Boolean,
+    onOpenUpdate: () -> Unit
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -383,38 +479,59 @@ fun CyberHeader(
             )
         }
 
-        val badgeText = when {
-            !isMasterEnabled -> "STANDBY"
-            isMuted -> "HIJACKED"
-            else -> "ARMED"
-        }
-        val badgeColor = when {
-            !isMasterEnabled -> TextMuted
-            isMuted -> NeonGreen
-            else -> NeonCyan
-        }
-
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(20.dp))
-                .background(badgeColor.copy(alpha = 0.15f))
-                .border(1.dp, badgeColor, RoundedCornerShape(20.dp))
-                .padding(horizontal = 12.dp, vertical = 6.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(8.dp)
-                        .clip(CircleShape)
-                        .background(badgeColor)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            // Update Check Button
+            Button(
+                onClick = onOpenUpdate,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = NeonPurple.copy(alpha = 0.2f),
+                    contentColor = NeonPurple
+                ),
+                shape = RoundedCornerShape(16.dp),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                modifier = Modifier.padding(end = 8.dp)
+            ) {
                 Text(
-                    text = badgeText,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = badgeColor
+                    text = "❄️ UPDATE",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Black,
+                    fontFamily = FontFamily.Monospace
                 )
+            }
+
+            val badgeText = when {
+                !isMasterEnabled -> "STANDBY"
+                isMuted -> "HIJACKED"
+                else -> "ARMED"
+            }
+            val badgeColor = when {
+                !isMasterEnabled -> TextMuted
+                isMuted -> NeonGreen
+                else -> NeonCyan
+            }
+
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(badgeColor.copy(alpha = 0.15f))
+                    .border(1.dp, badgeColor, RoundedCornerShape(20.dp))
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(badgeColor)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = badgeText,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = badgeColor
+                    )
+                }
             }
         }
     }
