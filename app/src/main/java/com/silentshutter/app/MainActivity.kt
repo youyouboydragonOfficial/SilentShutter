@@ -396,7 +396,7 @@ fun MainDashboardScreen(
             item {
                 Spacer(modifier = Modifier.height(20.dp))
                 Text(
-                    text = "SilentShutter v2.4.0 • Default Camera Shutter Hacker",
+                    text = "SilentShutter v2.5.0 • Default Camera Shutter Hacker",
                     color = TextMuted,
                     fontSize = 12.sp,
                     textAlign = TextAlign.Center,

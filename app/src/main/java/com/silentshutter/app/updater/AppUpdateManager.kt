@@ -21,7 +21,7 @@ import java.util.Locale
 object AppUpdateManager {
 
     private const val TAG = "AppUpdateManager"
-    const val CURRENT_VERSION = "2.4.0"
+    const val CURRENT_VERSION = "2.5.0"
     private const val GITHUB_API_URL = "https://api.github.com/repos/youyouboydragonOfficial/SilentShutter/releases/latest"
 
     sealed class UpdateState {
