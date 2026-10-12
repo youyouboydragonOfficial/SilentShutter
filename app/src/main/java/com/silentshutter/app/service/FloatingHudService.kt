@@ -129,11 +129,8 @@ class FloatingHudService : Service() {
                     if (!hasMoved) {
                         val duration = System.currentTimeMillis() - touchDownTime
                         if (duration > 450) {
-                            // Long-press: Launch zero-sound camera
-                            val camIntent = Intent(this, com.silentshutter.app.camera.SilentCameraActivity::class.java).apply {
-                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            }
-                            startActivity(camIntent)
+                            // Long-press: Launch default camera
+                            ShutterMuteManager.launchDefaultCamera()
                         } else {
                             // Tap: Toggle instant mute
                             ShutterMuteManager.toggleInstantMute()

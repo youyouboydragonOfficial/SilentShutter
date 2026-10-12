@@ -2,18 +2,16 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Camera Permissions -->
-    <uses-permission android:name="android.permission.CAMERA" />
-    <uses-feature android:name="android.hardware.camera.any" android:required="false" />
-
-    <!-- Audio & System Permissions -->
+    <!-- Audio & System Routing Permissions -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
-    <!-- Optional: granted via ADB for direct Samsung/CSC mute -->
+    
+    <!-- Shizuku & ADB permission for direct system setting injection -->
     <uses-permission
         android:name="android.permission.WRITE_SECURE_SETTINGS"
         tools:ignore="ProtectedPermissions" />
@@ -39,20 +37,7 @@
             </intent-filter>
         </activity>
 
-        <!-- Zero-Shutter Cyber Camera Activity -->
-        <activity
-            android:name=".camera.SilentCameraActivity"
-            android:exported="true"
-            android:screenOrientation="portrait"
-            android:theme="@style/Theme.SilentShutter">
-            <intent-filter>
-                <action android:name="android.media.action.IMAGE_CAPTURE" />
-                <action android:name="android.media.action.STILL_IMAGE_CAMERA" />
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
-        </activity>
-
-        <!-- Accessibility Service for Camera Detection & Real-time Mute -->
+        <!-- Accessibility Service for Default Camera Interception & Audio Hijack -->
         <service
             android:name=".service.SilentAccessibilityService"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"

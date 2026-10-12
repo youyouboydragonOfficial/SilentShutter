@@ -1,5 +1,8 @@
 package com.silentshutter.app
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -38,10 +41,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.FlashOn
+import androidx.compose.material.icons.filled.Launch
 import androidx.compose.material.icons.filled.PowerSettingsNew
+import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.VolumeUp
@@ -80,6 +86,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.silentshutter.app.hack.ShizukuSystemHacker
 import com.silentshutter.app.manager.ShutterMuteManager
 import com.silentshutter.app.service.FloatingHudService
 import com.silentshutter.app.ui.theme.CyberBg
@@ -107,12 +114,15 @@ class MainActivity : ComponentActivity() {
                     onOpenDndSettings = { openDndSettings() },
                     onOpenOverlaySettings = { openOverlaySettings() },
                     onToggleFloatingHud = { enabled -> toggleFloatingHudService(enabled) },
-                    onLaunchSilentCamera = {
-                        startActivity(Intent(this, com.silentshutter.app.camera.SilentCameraActivity::class.java))
-                    }
+                    onLaunchDefaultCamera = { ShutterMuteManager.launchDefaultCamera() }
                 )
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        ShizukuSystemHacker.checkShizukuState()
     }
 
     private fun openAccessibilitySettings() {
@@ -174,15 +184,21 @@ fun MainDashboardScreen(
     onOpenDndSettings: () -> Unit,
     onOpenOverlaySettings: () -> Unit,
     onToggleFloatingHud: (Boolean) -> Unit,
-    onLaunchSilentCamera: () -> Unit
+    onLaunchDefaultCamera: () -> Unit
 ) {
     val isMasterEnabled by ShutterMuteManager.isMasterEnabled.collectAsState()
+    val isAudioHijackEnabled by ShutterMuteManager.isAudioHijackEnabled.collectAsState()
+    val isShutterTapInterceptEnabled by ShutterMuteManager.isShutterTapInterceptEnabled.collectAsState()
     val isCurrentlyMuted by ShutterMuteManager.isCurrentlyMuted.collectAsState()
     val isAccessibilityConnected by ShutterMuteManager.isAccessibilityServiceConnected.collectAsState()
-    val activeCameraPackage by ShutterMuteManager.activeCameraPackage.collectAsState()
+    val detectedDefaultCamera by ShutterMuteManager.detectedDefaultCamera.collectAsState()
     val isFloatingHudEnabled by ShutterMuteManager.isFloatingHudEnabled.collectAsState()
     val targetPackages by ShutterMuteManager.targetPackages.collectAsState()
     val logs by ShutterMuteManager.logs.collectAsState()
+
+    val isShizukuAvailable by ShizukuSystemHacker.isShizukuAvailable.collectAsState()
+    val hasShizukuPermission by ShizukuSystemHacker.hasShizukuPermission.collectAsState()
+    val hasSecureSettingsPermission by ShizukuSystemHacker.hasSecureSettingsPermission.collectAsState()
 
     val context = LocalContext.current
     var hasDndPermission by remember { mutableStateOf(ShutterMuteManager.hasDndPermission()) }
@@ -192,6 +208,7 @@ fun MainDashboardScreen(
 
     LaunchedEffect(Unit) {
         hasDndPermission = ShutterMuteManager.hasDndPermission()
+        ShizukuSystemHacker.checkShizukuState()
     }
 
     Surface(
@@ -221,12 +238,40 @@ fun MainDashboardScreen(
                 )
             }
 
-            // Zero-Sound Hardware Camera Card (Guaranteed 0dB for all devices)
+            // Target Default Camera & Test Launch Card
             item {
-                CyberSilentCameraCard(onLaunch = onLaunchSilentCamera)
+                TargetDefaultCameraCard(
+                    defaultCameraPkg = detectedDefaultCamera,
+                    onLaunch = onLaunchDefaultCamera
+                )
             }
 
-            // Engine Status & Permission Radar Card
+            // Core Hack Modules
+            item {
+                HackModulesCard(
+                    isAudioHijackEnabled = isAudioHijackEnabled,
+                    isShutterTapEnabled = isShutterTapInterceptEnabled,
+                    onToggleAudioHijack = { ShutterMuteManager.setAudioHijackEnabled(it) },
+                    onToggleShutterTap = { ShutterMuteManager.setShutterTapInterceptEnabled(it) }
+                )
+            }
+
+            // Shizuku & System Setting Deep Hacker
+            item {
+                ShizukuHackerCard(
+                    isShizukuAvailable = isShizukuAvailable,
+                    hasShizukuPermission = hasShizukuPermission,
+                    hasSecureSettings = hasSecureSettingsPermission,
+                    onRequestShizuku = { ShizukuSystemHacker.requestShizukuPermission() },
+                    onInjectHacks = {
+                        val results = ShizukuSystemHacker.injectAllSystemHacks()
+                        Toast.makeText(context, results.joinToString("\n"), Toast.LENGTH_LONG).show()
+                    },
+                    onShowAdb = { showAdbDialog = true }
+                )
+            }
+
+            // Engine Radar & Permission Status
             item {
                 StatusRadarCard(
                     isAccessibilityConnected = isAccessibilityConnected,
@@ -236,14 +281,13 @@ fun MainDashboardScreen(
                 )
             }
 
-            // Quick Control Center (Tiles & HUD & Testing)
+            // Quick Control Center (Tiles & HUD)
             item {
                 QuickControlsCard(
                     isCurrentlyMuted = isCurrentlyMuted,
                     isFloatingHudEnabled = isFloatingHudEnabled,
                     onInstantMuteToggle = { ShutterMuteManager.toggleInstantMute() },
-                    onToggleFloatingHud = onToggleFloatingHud,
-                    onShowAdbGuide = { showAdbDialog = true }
+                    onToggleFloatingHud = onToggleFloatingHud
                 )
             }
 
@@ -274,7 +318,7 @@ fun MainDashboardScreen(
             item {
                 Spacer(modifier = Modifier.height(20.dp))
                 Text(
-                    text = "SilentShutter v1.0.0 • Non-Root Camera Silencer",
+                    text = "SilentShutter v2.0.0 • Default Camera Shutter Hacker",
                     color = TextMuted,
                     fontSize = 12.sp,
                     textAlign = TextAlign.Center,
@@ -287,14 +331,12 @@ fun MainDashboardScreen(
     // ADB Guide Dialog
     if (showAdbDialog) {
         AdbGuideDialog(
+            guideText = ShizukuSystemHacker.getAdbCommandGuide(),
             onDismiss = { showAdbDialog = false },
-            onApplyCsc = {
-                val success = ShutterMuteManager.toggleSamsungCscShutterSound(true)
-                if (success) {
-                    Toast.makeText(context, "Galaxy シャッター音を強制無効化しました", Toast.LENGTH_SHORT).show()
-                } else {
-                    Toast.makeText(context, "書き込み失敗: ADBで権限を付与してください", Toast.LENGTH_LONG).show()
-                }
+            onCopy = {
+                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                clipboard.setPrimaryClip(ClipData.newPlainText("ADB Command", ShizukuSystemHacker.getAdbCommandGuide()))
+                Toast.makeText(context, "コマンドをクリップボードにコピーしました", Toast.LENGTH_SHORT).show()
             }
         )
     }
@@ -333,7 +375,7 @@ fun CyberHeader(
                 color = NeonCyan
             )
             Text(
-                text = "NON-ROOT CAMERA SILENCER",
+                text = "DEFAULT CAMERA SHUTTER HACKER",
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 1.sp,
@@ -343,7 +385,7 @@ fun CyberHeader(
 
         val badgeText = when {
             !isMasterEnabled -> "STANDBY"
-            isMuted -> "MUTED"
+            isMuted -> "HIJACKED"
             else -> "ARMED"
         }
         val badgeColor = when {
@@ -405,7 +447,7 @@ fun MegaPowerSwitch(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp),
+            .padding(vertical = 4.dp),
         colors = CardDefaults.cardColors(containerColor = CyberSurface),
         shape = RoundedCornerShape(24.dp),
         border = BorderStroke(1.dp, CyberCardBorder)
@@ -413,14 +455,14 @@ fun MegaPowerSwitch(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 32.dp, horizontal = 20.dp),
+                .padding(vertical = 28.dp, horizontal = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // Giant Neon Glowing Switch Button
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
-                    .size(170.dp)
+                    .size(160.dp)
                     .scale(if (isEnabled) pulseScale else 1.0f)
                     .clip(CircleShape)
                     .background(
@@ -447,12 +489,12 @@ fun MegaPowerSwitch(
                         imageVector = Icons.Default.PowerSettingsNew,
                         contentDescription = "Master Power",
                         tint = ringColor,
-                        modifier = Modifier.size(64.dp)
+                        modifier = Modifier.size(60.dp)
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = if (isEnabled) "ON" else "OFF",
-                        fontSize = 18.sp,
+                        text = if (isEnabled) "HACK ON" else "STANDBY",
+                        fontSize = 16.sp,
                         fontWeight = FontWeight.Black,
                         color = ringColor,
                         letterSpacing = 2.sp
@@ -460,15 +502,15 @@ fun MegaPowerSwitch(
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(18.dp))
 
             Text(
                 text = if (isEnabled) {
-                    if (isMuted) "撮影中: シャッター音消音発動中" else "監視中: カメラ起動時に自動消音"
+                    if (isMuted) "デフォルトカメラをハイジャック中: シャッター音遮断" else "監視中: 純正カメラ起動時に自動消音ハック発動"
                 } else {
-                    "停止中: タップして無音化エンジンを起動"
+                    "停止中: タップしてハッカーエンジンを起動"
                 },
-                fontSize = 15.sp,
+                fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = if (isEnabled) TextPrimary else TextSecondary,
                 textAlign = TextAlign.Center
@@ -478,20 +520,17 @@ fun MegaPowerSwitch(
 }
 
 @Composable
-fun CyberSilentCameraCard(
+fun TargetDefaultCameraCard(
+    defaultCameraPkg: String,
     onLaunch: () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = CyberCard),
         shape = RoundedCornerShape(20.dp),
-        border = BorderStroke(1.5.dp, NeonCyan.copy(alpha = 0.6f))
+        border = BorderStroke(1.5.dp, NeonCyan.copy(alpha = 0.7f))
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(20.dp)
-        ) {
+        Column(modifier = Modifier.padding(18.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -499,15 +538,15 @@ fun CyberSilentCameraCard(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        imageVector = Icons.Default.CameraAlt,
+                        imageVector = Icons.Default.Launch,
                         contentDescription = null,
                         tint = NeonCyan,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(20.dp)
                     )
-                    Spacer(modifier = Modifier.width(10.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "ZERO-SOUND CAMERA",
-                        fontSize = 15.sp,
+                        text = "TARGET DEFAULT CAMERA",
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.Black,
                         color = NeonCyan,
                         letterSpacing = 1.sp
@@ -516,16 +555,15 @@ fun CyberSilentCameraCard(
 
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(NeonGreen.copy(alpha = 0.15f))
-                        .border(1.dp, NeonGreen, RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0x3300F0FF))
                         .padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
                     Text(
-                        text = "100% 0dB",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = NeonGreen,
+                        text = "DETECTED",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = NeonCyan,
                         fontFamily = FontFamily.Monospace
                     )
                 }
@@ -534,13 +572,19 @@ fun CyberSilentCameraCard(
             Spacer(modifier = Modifier.height(10.dp))
 
             Text(
-                text = "Pixel・Xperia等の国内仕様端末でもOSの制限を受けず、CameraXにより100%完全無音で高画質撮影できる内蔵サイバーカメラです。(Pictures/SilentShutter に自動保存)",
-                fontSize = 12.sp,
-                color = TextSecondary,
-                lineHeight = 18.sp
+                text = defaultCameraPkg,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace,
+                color = NeonGreen
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "端末標準の純正カメラアプリです。下のボタンで起動してシャッター音の無音化をテストできます。",
+                fontSize = 11.sp,
+                color = TextSecondary,
+                modifier = Modifier.padding(top = 4.dp, bottom = 14.dp)
+            )
 
             Button(
                 onClick = onLaunch,
@@ -548,21 +592,217 @@ fun CyberSilentCameraCard(
                     containerColor = NeonCyan,
                     contentColor = CyberBg
                 ),
-                shape = RoundedCornerShape(14.dp),
+                shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Icon(
-                    imageVector = Icons.Default.CameraAlt,
+                    imageVector = Icons.Default.Launch,
                     contentDescription = null,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(16.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "完全無音カメラを起動",
-                    fontSize = 14.sp,
+                    text = "デフォルトカメラを起動してテスト",
                     fontWeight = FontWeight.Black,
-                    letterSpacing = 1.sp
+                    fontSize = 13.sp
                 )
+            }
+        }
+    }
+}
+
+@Composable
+fun HackModulesCard(
+    isAudioHijackEnabled: Boolean,
+    isShutterTapEnabled: Boolean,
+    onToggleAudioHijack: (Boolean) -> Unit,
+    onToggleShutterTap: (Boolean) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = CyberCard),
+        shape = RoundedCornerShape(18.dp),
+        border = BorderStroke(1.dp, CyberCardBorder)
+    ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            Text(
+                text = "HACK MODULES (ROOTLESS)",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = NeonCyan,
+                letterSpacing = 1.sp
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Module 1: Audio Route Hijacker
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "通話モード & オーディオルーティング乗っ取り",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary
+                    )
+                    Text(
+                        text = "カメラ起動中、OSの警告音パイプラインを通話専用パスへ迂回させスピーカ出力を遮断",
+                        fontSize = 11.sp,
+                        color = TextSecondary
+                    )
+                }
+                Switch(
+                    checked = isAudioHijackEnabled,
+                    onCheckedChange = onToggleAudioHijack,
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = NeonCyan,
+                        checkedTrackColor = NeonCyan.copy(alpha = 0.4f),
+                        uncheckedThumbColor = TextMuted,
+                        uncheckedTrackColor = CyberBg
+                    )
+                )
+            }
+
+            HorizontalDivider(color = Color(0x1A00F0FF), modifier = Modifier.padding(vertical = 12.dp))
+
+            // Module 2: Shutter Tap Interceptor
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "シャッター操作検知 ミリ秒パルス",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary
+                    )
+                    Text(
+                        text = "純正カメラ内のシャッターボタンが押された瞬間を超高速検知し、瞬時消音パルスを発動",
+                        fontSize = 11.sp,
+                        color = TextSecondary
+                    )
+                }
+                Switch(
+                    checked = isShutterTapEnabled,
+                    onCheckedChange = onToggleShutterTap,
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = NeonGreen,
+                        checkedTrackColor = NeonGreen.copy(alpha = 0.4f),
+                        uncheckedThumbColor = TextMuted,
+                        uncheckedTrackColor = CyberBg
+                    )
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun ShizukuHackerCard(
+    isShizukuAvailable: Boolean,
+    hasShizukuPermission: Boolean,
+    hasSecureSettings: Boolean,
+    onRequestShizuku: () -> Unit,
+    onInjectHacks: () -> Unit,
+    onShowAdb: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = CyberCard),
+        shape = RoundedCornerShape(18.dp),
+        border = BorderStroke(1.dp, NeonPurple.copy(alpha = 0.5f))
+    ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Psychology,
+                        contentDescription = null,
+                        tint = NeonPurple,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "SHIZUKU & SYSTEM INJECTOR",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = NeonPurple,
+                        letterSpacing = 1.sp
+                    )
+                }
+
+                val statusText = when {
+                    hasShizukuPermission -> "SHIZUKU READY"
+                    isShizukuAvailable -> "PERMISSION NEEDED"
+                    hasSecureSettings -> "ADB SECURE ACTIVE"
+                    else -> "STANDBY"
+                }
+                val statusColor = if (hasShizukuPermission || hasSecureSettings) NeonGreen else NeonPurple
+
+                Text(
+                    text = statusText,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
+                    color = statusColor
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Text(
+                text = "Shizuku または ADB を通じて、Galaxy等の純正カメラシャッター音フラグ（CSCキー）やOEM設定をroot化なしで直接書き換えます。",
+                fontSize = 12.sp,
+                color = TextSecondary
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                if (isShizukuAvailable && !hasShizukuPermission) {
+                    Button(
+                        onClick = onRequestShizuku,
+                        colors = ButtonDefaults.buttonColors(containerColor = NeonPurple),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Shizukuを許可", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                } else {
+                    Button(
+                        onClick = onInjectHacks,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (hasShizukuPermission || hasSecureSettings) NeonPurple else Color(0x338B5CF6)
+                        ),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("システム設定を注入", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                Button(
+                    onClick = onShowAdb,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = CyberSurface,
+                        contentColor = TextPrimary
+                    ),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("ADB案内", fontSize = 12.sp)
+                }
             }
         }
     }
@@ -591,7 +831,7 @@ fun StatusRadarCard(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "ENGINE RADAR & PERMISSIONS",
+                    text = "PERMISSIONS & RADAR",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
                     color = NeonCyan,
@@ -604,7 +844,7 @@ fun StatusRadarCard(
             // Accessibility Item
             PermissionStatusRow(
                 title = "ユーザー補助サービス (必須)",
-                subtitle = "カメラの起動/終了を自動検知して消音します",
+                subtitle = "純正カメラの起動＆シャッター操作をリアルタイム検知",
                 isGranted = isAccessibilityConnected,
                 buttonText = if (isAccessibilityConnected) "稼働中" else "設定を開く",
                 onClick = onOpenAccessibility
@@ -615,7 +855,7 @@ fun StatusRadarCard(
             // DND Item
             PermissionStatusRow(
                 title = "マナーモード / DND 制御権限",
-                subtitle = "シャッター音・システム音の完全消音に必要です",
+                subtitle = "システム警告音ストリームの完全消音に必要",
                 isGranted = hasDndPermission,
                 buttonText = if (hasDndPermission) "許可済み" else "許可する",
                 onClick = onOpenDnd
@@ -648,7 +888,7 @@ fun PermissionStatusRow(
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
                     text = title,
-                    fontSize = 14.sp,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
                     color = TextPrimary
                 )
@@ -682,8 +922,7 @@ fun QuickControlsCard(
     isCurrentlyMuted: Boolean,
     isFloatingHudEnabled: Boolean,
     onInstantMuteToggle: () -> Unit,
-    onToggleFloatingHud: (Boolean) -> Unit,
-    onShowAdbGuide: () -> Unit
+    onToggleFloatingHud: (Boolean) -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -710,13 +949,13 @@ fun QuickControlsCard(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "即時消音テスト (Instant Mute)",
-                        fontSize = 14.sp,
+                        text = "即時ハイジャックテスト",
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                         color = TextPrimary
                     )
                     Text(
-                        text = if (isCurrentlyMuted) "現在ミュート中 (タップで復元)" else "タップして手動で即座に消音テスト",
+                        text = if (isCurrentlyMuted) "現在ハイジャック中 (タップで復元)" else "タップして通話モードハイジャックを即時テスト",
                         fontSize = 11.sp,
                         color = TextSecondary
                     )
@@ -755,12 +994,12 @@ fun QuickControlsCard(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "フローティングHUD (画面端ボタン)",
-                        fontSize = 14.sp,
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                         color = TextPrimary
                     )
                     Text(
-                        text = "カメラ起動中も画面の隅から瞬時に消音トグル",
+                        text = "画面端のボタンから瞬時に消音トグル / 長押しで純正カメラ起動",
                         fontSize = 11.sp,
                         color = TextSecondary
                     )
@@ -775,39 +1014,6 @@ fun QuickControlsCard(
                         uncheckedTrackColor = CyberBg
                     )
                 )
-            }
-
-            HorizontalDivider(color = Color(0x1A00F0FF), modifier = Modifier.padding(vertical = 12.dp))
-
-            // Galaxy / ADB CSC Mode
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Samsung Galaxy / ADB直接無音化",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimary
-                    )
-                    Text(
-                        text = "CSCカメラ設定を直接無効化するADBコマンド手順",
-                        fontSize = 11.sp,
-                        color = TextSecondary
-                    )
-                }
-                Button(
-                    onClick = onShowAdbGuide,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = NeonPurple.copy(alpha = 0.2f),
-                        contentColor = NeonPurple
-                    ),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text(text = "案内/適用", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                }
             }
         }
     }
@@ -834,7 +1040,7 @@ fun TargetAppsCard(
             ) {
                 Column {
                     Text(
-                        text = "TARGET CAMERA APPS ($targetCount)",
+                        text = "TARGET CAMERA PACKAGES ($targetCount)",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                         color = NeonCyan,
@@ -923,7 +1129,7 @@ fun CyberConsoleCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "LIVE SYSTEM CONSOLE",
+                    text = "LIVE HACK CONSOLE",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     color = NeonGreen,
@@ -943,14 +1149,14 @@ fun CyberConsoleCard(
 
             if (logs.isEmpty()) {
                 Text(
-                    text = "> 待機中... カメライベントを検知するとここに表示されます",
+                    text = "> 待機中... 純正カメラ起動またはシャッター操作時にログが表示されます",
                     fontSize = 11.sp,
                     color = TextMuted,
                     fontFamily = FontFamily.Monospace
                 )
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    logs.take(8).forEach { entry ->
+                    logs.take(10).forEach { entry ->
                         Text(
                             text = "${entry.timestamp} ${entry.message}",
                             fontSize = 11.sp,
@@ -966,15 +1172,16 @@ fun CyberConsoleCard(
 
 @Composable
 fun AdbGuideDialog(
+    guideText: String,
     onDismiss: () -> Unit,
-    onApplyCsc: () -> Unit
+    onCopy: () -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = CyberCard,
         title = {
             Text(
-                text = "Galaxy & ADB 直接消音",
+                text = "ADB コマンド案内",
                 color = NeonPurple,
                 fontWeight = FontWeight.Bold
             )
@@ -982,7 +1189,7 @@ fun AdbGuideDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
-                    text = "Samsung Galaxyなどの端末では、ADBコマンドでカメラ設定の強制シャッター音フラグを直接OFFにできます（root化不要）。",
+                    text = "PCまたはワイヤレスデバッグから以下のADBコマンドを実行すると、Galaxyの純正カメラシャッター音フラグの直接無効化と特権自己付与が行われます。",
                     fontSize = 13.sp,
                     color = TextPrimary
                 )
@@ -994,25 +1201,22 @@ fun AdbGuideDialog(
                         .padding(10.dp)
                 ) {
                     Text(
-                        text = "adb shell pm grant com.silentshutter.app android.permission.WRITE_SECURE_SETTINGS\n\nまたは直接設定:\nadb shell settings put system csc_pref_camera_forced_shuttersound_key 0",
+                        text = guideText,
                         fontSize = 11.sp,
                         fontFamily = FontFamily.Monospace,
                         color = NeonCyan
                     )
                 }
-                Text(
-                    text = "権限付与済みの場合は下のボタンで直接設定を適用できます。",
-                    fontSize = 12.sp,
-                    color = TextSecondary
-                )
             }
         },
         confirmButton = {
             Button(
-                onClick = onApplyCsc,
+                onClick = onCopy,
                 colors = ButtonDefaults.buttonColors(containerColor = NeonPurple)
             ) {
-                Text("直接消音を適用")
+                Icon(imageVector = Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("コマンドをコピー")
             }
         },
         dismissButton = {
