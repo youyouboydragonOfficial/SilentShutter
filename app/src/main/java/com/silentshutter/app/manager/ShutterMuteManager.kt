@@ -1,5 +1,7 @@
 package com.silentshutter.app.manager
 
+import android.Manifest
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
@@ -8,8 +10,9 @@ import android.content.pm.PackageManager
 import android.media.AudioManager
 import android.os.Build
 import android.provider.MediaStore
-import android.provider.Settings
 import android.util.Log
+import android.view.accessibility.AccessibilityManager
+import androidx.core.content.ContextCompat
 import com.silentshutter.app.hack.AudioRoutingHijacker
 import com.silentshutter.app.hack.ShizukuSystemHacker
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,30 +27,39 @@ object ShutterMuteManager {
     private const val TAG = "ShutterMuteManager"
     private const val PREFS_NAME = "silentshutter_prefs"
     private const val KEY_MASTER_ENABLED = "master_enabled"
+    private const val KEY_ALWAYS_FORCE_MUTE = "always_force_mute"
     private const val KEY_FLOATING_HUD = "floating_hud_enabled"
     private const val KEY_AUDIO_HIJACK_ENABLED = "audio_hijack_enabled"
     private const val KEY_SHUTTER_TAP_INTERCEPT_ENABLED = "shutter_tap_intercept_enabled"
     private const val KEY_TARGET_PACKAGES = "target_packages"
 
-    // Default target camera packages
+    // Default target camera packages (expanded for Japanese OEM carriers)
     private val DEFAULT_TARGET_PACKAGES = setOf(
         "com.google.android.GoogleCamera",      // Pixel / Google Camera
         "com.sec.android.app.camera",           // Samsung Galaxy Camera
+        "com.samsung.android.camera",
         "com.sonyericsson.android.camera",      // Sony Xperia Camera
         "com.sony.camera",                      // Sony Photography Pro
+        "com.sony.photographypro",
+        "jp.co.sharp.android.camera",           // Sharp AQUOS Camera
+        "jp.co.sharp.android.camera2",
+        "com.sharp.camera",
+        "com.fujitsu.mobile_phone.camera",      // arrows Camera
         "com.motorola.camera",                  // Motorola Camera
         "com.motorola.camera2",
         "com.motorola.camera3",
         "com.android.camera",                   // Xiaomi / AOSP Camera
+        "com.miui.camera",
         "com.oppo.camera",                      // OPPO / Realme Camera
+        "com.coloros.camera",
         "com.oneplus.camera",                   // OnePlus Camera
-        "jp.co.sharp.android.camera",           // AQUOS Camera
         "com.asus.camera",                      // ASUS Camera
         "net.sourceforge.opencamera",          // Open Camera
         "jp.naver.line.android",                // LINE
         "com.instagram.android",                // Instagram
         "com.zhiliaoapp.musically",             // TikTok
-        "com.ss.android.ugc.trill"
+        "com.ss.android.ugc.trill",
+        "com.snapchat.android"                  // Snapchat
     )
 
     private lateinit var appContext: Context
@@ -58,6 +70,9 @@ object ShutterMuteManager {
     // Observable UI States
     private val _isMasterEnabled = MutableStateFlow(true)
     val isMasterEnabled: StateFlow<Boolean> = _isMasterEnabled.asStateFlow()
+
+    private val _isAlwaysForceMute = MutableStateFlow(false)
+    val isAlwaysForceMute: StateFlow<Boolean> = _isAlwaysForceMute.asStateFlow()
 
     private val _isAudioHijackEnabled = MutableStateFlow(true)
     val isAudioHijackEnabled: StateFlow<Boolean> = _isAudioHijackEnabled.asStateFlow()
@@ -99,6 +114,7 @@ object ShutterMuteManager {
         notificationManager = appContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         _isMasterEnabled.value = prefs.getBoolean(KEY_MASTER_ENABLED, true)
+        _isAlwaysForceMute.value = prefs.getBoolean(KEY_ALWAYS_FORCE_MUTE, false)
         _isAudioHijackEnabled.value = prefs.getBoolean(KEY_AUDIO_HIJACK_ENABLED, true)
         _isShutterTapInterceptEnabled.value = prefs.getBoolean(KEY_SHUTTER_TAP_INTERCEPT_ENABLED, true)
         _isFloatingHudEnabled.value = prefs.getBoolean(KEY_FLOATING_HUD, false)
@@ -115,7 +131,13 @@ object ShutterMuteManager {
         // Detect default camera
         detectDefaultCameraPackage()
 
-        addLog("SYSTEM_INIT", "Default Camera Hacker Engine armed", false)
+        // If Always Force Mute was active, engage immediately
+        if (_isMasterEnabled.value && _isAlwaysForceMute.value) {
+            saveAndMuteAudioState()
+            addLog("ALWAYS_MUTE", "Always Force Mute Mode engaged on boot", true)
+        } else {
+            addLog("SYSTEM_INIT", "Supercharged Camera Hacker Engine armed", false)
+        }
     }
 
     private fun detectDefaultCameraPackage() {
@@ -170,6 +192,20 @@ object ShutterMuteManager {
         }
     }
 
+    fun setAlwaysForceMute(enabled: Boolean) {
+        _isAlwaysForceMute.value = enabled
+        prefs.edit().putBoolean(KEY_ALWAYS_FORCE_MUTE, enabled).apply()
+        if (enabled) {
+            saveAndMuteAudioState()
+            addLog("ALWAYS_MUTE", "🚨 ALWAYS FORCE MUTE ENABLED (100% Silence Guaranteed)", true)
+        } else {
+            if (_activeCameraPackage.value == null) {
+                restoreAudioState()
+            }
+            addLog("ALWAYS_MUTE", "Always Force Mute disabled (Auto-detection mode)", false)
+        }
+    }
+
     fun setAudioHijackEnabled(enabled: Boolean) {
         _isAudioHijackEnabled.value = enabled
         prefs.edit().putBoolean(KEY_AUDIO_HIJACK_ENABLED, enabled).apply()
@@ -197,7 +233,12 @@ object ShutterMuteManager {
         val targets = _targetPackages.value
         if (targets.contains(packageName)) return true
         val lower = packageName.lowercase(Locale.ROOT)
-        return lower.contains("camera") || lower.contains("camscanner")
+        return lower.contains("camera") ||
+                lower.contains("camscanner") ||
+                lower.contains("cam") ||
+                lower.contains("photo") ||
+                lower.contains("lens") ||
+                lower.contains("shutter")
     }
 
     /**
@@ -207,20 +248,19 @@ object ShutterMuteManager {
     @Synchronized
     fun onCameraOpened(packageName: String) {
         if (!_isMasterEnabled.value) return
-        if (_isCurrentlyMuted.value && _activeCameraPackage.value == packageName) return
-
         _activeCameraPackage.value = packageName
+
         saveAndMuteAudioState()
-        addLog("CAMERA_HIJACK", "App: $packageName -> ROUTE HIJACKED", true)
+        addLog("CAMERA_HIJACK", "App: $packageName -> ROUTE HIJACKED (Stream 7 Muted)", true)
     }
 
     /**
      * Triggered when user taps the shutter button inside the camera app.
-     * Emits a millisecond high-priority mute pulse.
+     * Emits a supercharged mute pulse without dropping the hijack.
      */
     fun onShutterButtonClicked(viewDesc: String) {
         if (!_isMasterEnabled.value || !_isShutterTapInterceptEnabled.value) return
-        AudioRoutingHijacker.triggerShutterPulse(800)
+        AudioRoutingHijacker.triggerShutterPulse()
         _isCurrentlyMuted.value = true
         addLog("SHUTTER_PULSE", "Shutter Click Intercepted [$viewDesc] -> PULSE MUTE", true)
     }
@@ -230,6 +270,12 @@ object ShutterMuteManager {
      */
     @Synchronized
     fun onCameraClosed() {
+        if (_isAlwaysForceMute.value) {
+            // Keep muted if Always Force Mute is enabled
+            _activeCameraPackage.value = null
+            return
+        }
+
         if (!_isCurrentlyMuted.value && _activeCameraPackage.value == null) return
 
         val prevApp = _activeCameraPackage.value ?: "unknown"
@@ -245,10 +291,12 @@ object ShutterMuteManager {
     fun toggleInstantMute() {
         if (_isCurrentlyMuted.value) {
             restoreAudioState()
+            _isAlwaysForceMute.value = false
+            prefs.edit().putBoolean(KEY_ALWAYS_FORCE_MUTE, false).apply()
             addLog("MANUAL_RESTORE", "Audio state restored", false)
         } else {
             saveAndMuteAudioState()
-            addLog("MANUAL_HIJACK", "Manual Audio Hijack activated", true)
+            addLog("MANUAL_HIJACK", "Manual Audio Hijack activated (STREAM 7 + Earpiece)", true)
         }
     }
 
@@ -280,6 +328,20 @@ object ShutterMuteManager {
         } else {
             true
         }
+    }
+
+    fun hasAccessibilityPermission(): Boolean {
+        return try {
+            val am = appContext.getSystemService(Context.ACCESSIBILITY_SERVICE) as? AccessibilityManager ?: return false
+            val enabledServices = am.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
+            enabledServices.any { it.resolveInfo.serviceInfo.packageName == appContext.packageName }
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    fun hasRecordAudioPermission(): Boolean {
+        return ContextCompat.checkSelfPermission(appContext, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
     }
 
     fun addTargetPackage(pkg: String) {

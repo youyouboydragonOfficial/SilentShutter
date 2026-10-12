@@ -102,11 +102,21 @@ import com.silentshutter.app.ui.theme.NeonYellow
 import com.silentshutter.app.ui.theme.SilentShutterTheme
 import com.silentshutter.app.ui.theme.TextMuted
 import com.silentshutter.app.ui.theme.TextPrimary
+import android.Manifest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.Crossfade
 import com.silentshutter.app.ui.splash.UnitySplashScreen
 import com.silentshutter.app.ui.theme.TextSecondary
 
 class MainActivity : ComponentActivity() {
+
+    private val requestRecordAudioLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            Toast.makeText(this, "マイク権限を許可しました（通話ハードウェアロック有効）", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -130,6 +140,7 @@ class MainActivity : ComponentActivity() {
                             onOpenAccessibilitySettings = { openAccessibilitySettings() },
                             onOpenDndSettings = { openDndSettings() },
                             onOpenOverlaySettings = { openOverlaySettings() },
+                            onRequestMicPermission = { requestRecordAudioLauncher.launch(Manifest.permission.RECORD_AUDIO) },
                             onToggleFloatingHud = { enabled -> toggleFloatingHudService(enabled) },
                             onLaunchDefaultCamera = { ShutterMuteManager.launchDefaultCamera() }
                         )
@@ -202,10 +213,12 @@ fun MainDashboardScreen(
     onOpenAccessibilitySettings: () -> Unit,
     onOpenDndSettings: () -> Unit,
     onOpenOverlaySettings: () -> Unit,
+    onRequestMicPermission: () -> Unit,
     onToggleFloatingHud: (Boolean) -> Unit,
     onLaunchDefaultCamera: () -> Unit
 ) {
     val isMasterEnabled by ShutterMuteManager.isMasterEnabled.collectAsState()
+    val isAlwaysForceMute by ShutterMuteManager.isAlwaysForceMute.collectAsState()
     val isAudioHijackEnabled by ShutterMuteManager.isAudioHijackEnabled.collectAsState()
     val isShutterTapInterceptEnabled by ShutterMuteManager.isShutterTapInterceptEnabled.collectAsState()
     val isCurrentlyMuted by ShutterMuteManager.isCurrentlyMuted.collectAsState()
@@ -221,6 +234,7 @@ fun MainDashboardScreen(
 
     val context = LocalContext.current
     var hasDndPermission by remember { mutableStateOf(ShutterMuteManager.hasDndPermission()) }
+    var hasMicPermission by remember { mutableStateOf(ShutterMuteManager.hasRecordAudioPermission()) }
     var showAdbDialog by remember { mutableStateOf(false) }
     var showAddPkgDialog by remember { mutableStateOf(false) }
     var showTargetList by remember { mutableStateOf(false) }
@@ -228,6 +242,7 @@ fun MainDashboardScreen(
 
     LaunchedEffect(Unit) {
         hasDndPermission = ShutterMuteManager.hasDndPermission()
+        hasMicPermission = ShutterMuteManager.hasRecordAudioPermission()
         ShizukuSystemHacker.checkShizukuState()
     }
 
@@ -247,6 +262,26 @@ fun MainDashboardScreen(
                     isMasterEnabled = isMasterEnabled,
                     isMuted = isCurrentlyMuted,
                     onOpenUpdate = { showUpdateDialog = true }
+                )
+            }
+
+            // ⚠️ Diagnostic Alert Banner (Shows if key permissions are missing)
+            item {
+                DiagnosticAlertBanner(
+                    isAccessibilityConnected = isAccessibilityConnected,
+                    hasDndPermission = hasDndPermission,
+                    hasMicPermission = hasMicPermission,
+                    onOpenAccessibility = onOpenAccessibilitySettings,
+                    onOpenDnd = onOpenDndSettings,
+                    onRequestMic = onRequestMicPermission
+                )
+            }
+
+            // 🚨 Always Force Mute Mode (100% Silence Guaranteed)
+            item {
+                AlwaysForceMuteCard(
+                    isAlwaysForceMute = isAlwaysForceMute,
+                    onToggle = { ShutterMuteManager.setAlwaysForceMute(it) }
                 )
             }
 
@@ -304,8 +339,10 @@ fun MainDashboardScreen(
                 StatusRadarCard(
                     isAccessibilityConnected = isAccessibilityConnected,
                     hasDndPermission = hasDndPermission,
+                    hasMicPermission = hasMicPermission,
                     onOpenAccessibility = onOpenAccessibilitySettings,
-                    onOpenDnd = onOpenDndSettings
+                    onOpenDnd = onOpenDndSettings,
+                    onRequestMic = onRequestMicPermission
                 )
             }
 
@@ -346,7 +383,7 @@ fun MainDashboardScreen(
             item {
                 Spacer(modifier = Modifier.height(20.dp))
                 Text(
-                    text = "SilentShutter v2.0.0 • Default Camera Shutter Hacker",
+                    text = "SilentShutter v2.3.0 • Default Camera Shutter Hacker",
                     color = TextMuted,
                     fontSize = 12.sp,
                     textAlign = TextAlign.Center,
@@ -947,8 +984,10 @@ fun ShizukuHackerCard(
 fun StatusRadarCard(
     isAccessibilityConnected: Boolean,
     hasDndPermission: Boolean,
+    hasMicPermission: Boolean,
     onOpenAccessibility: () -> Unit,
-    onOpenDnd: () -> Unit
+    onOpenDnd: () -> Unit,
+    onRequestMic: () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -990,11 +1029,210 @@ fun StatusRadarCard(
             // DND Item
             PermissionStatusRow(
                 title = "マナーモード / DND 制御権限",
-                subtitle = "システム警告音ストリームの完全消音に必要",
+                subtitle = "システム警告音ストリーム(7)の完全消音に必要",
                 isGranted = hasDndPermission,
                 buttonText = if (hasDndPermission) "許可済み" else "許可する",
                 onClick = onOpenDnd
             )
+
+            HorizontalDivider(color = Color(0x1A00F0FF), modifier = Modifier.padding(vertical = 10.dp))
+
+            // Microphone Permission Item
+            PermissionStatusRow(
+                title = "マイク権限 (通話ハードウェアロック)",
+                subtitle = "Androidのスピーカー保護による強制シャッター音の完全遮断に必要",
+                isGranted = hasMicPermission,
+                buttonText = if (hasMicPermission) "許可済み" else "許可する",
+                onClick = onRequestMic
+            )
+        }
+    }
+}
+
+/**
+ * 🚨 Always Force Mute Mode Card
+ * ユーザーがONにすると、カメラ起動検知に関係なく端末全体を100%完全無音化する。
+ */
+@Composable
+fun AlwaysForceMuteCard(
+    isAlwaysForceMute: Boolean,
+    onToggle: (Boolean) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isAlwaysForceMute) Color(0x2E00E676) else Color(0x1AFF0055)
+        ),
+        shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(
+            1.5.dp,
+            if (isAlwaysForceMute) NeonGreen else NeonRed.copy(alpha = 0.8f)
+        )
+    ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = if (isAlwaysForceMute) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
+                        contentDescription = null,
+                        tint = if (isAlwaysForceMute) NeonGreen else NeonRed,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Text(
+                            text = if (isAlwaysForceMute) "常時強制無音化 【発動中】" else "常時強制無音化モード (最強消音)",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = if (isAlwaysForceMute) NeonGreen else TextPrimary
+                        )
+                        Text(
+                            text = if (isAlwaysForceMute) "全オーディオ・シャッター音ストリームを完全封殺中" else "タップしてONにするとカメラの音が100%鳴りません",
+                            fontSize = 11.sp,
+                            color = if (isAlwaysForceMute) NeonGreen.copy(alpha = 0.9f) else TextSecondary
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Switch(
+                    checked = isAlwaysForceMute,
+                    onCheckedChange = onToggle,
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = NeonGreen,
+                        checkedTrackColor = NeonGreen.copy(alpha = 0.4f),
+                        uncheckedThumbColor = TextMuted,
+                        uncheckedTrackColor = CyberBg
+                    )
+                )
+            }
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(
+                text = if (isAlwaysForceMute)
+                    "✅ 現在、カメラ自動検知に関係なく端末の全強制音（STREAM 7）とスピーカーが完全遮断されています。写真を撮り終えたらOFFにしてください。"
+                else
+                    "💡 「カメラのシャッター音が消えない」「自動検知が効かない」ときは、このスイッチをONにしてください！カメラ起動の検知なしで、端末のシャッター音を物理的に100%確実に消音します。",
+                fontSize = 11.sp,
+                color = TextSecondary,
+                lineHeight = 16.sp
+            )
+        }
+    }
+}
+
+/**
+ * ⚠️ Diagnostic Alert Banner
+ * 権限不足で音が鳴ってしまう原因をユーザーに通知し、ワンタップで許可させる。
+ */
+@Composable
+fun DiagnosticAlertBanner(
+    isAccessibilityConnected: Boolean,
+    hasDndPermission: Boolean,
+    hasMicPermission: Boolean,
+    onOpenAccessibility: () -> Unit,
+    onOpenDnd: () -> Unit,
+    onRequestMic: () -> Unit
+) {
+    if (isAccessibilityConnected && hasDndPermission && hasMicPermission) return
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color(0x33EF4444)),
+        shape = RoundedCornerShape(18.dp),
+        border = BorderStroke(1.2.dp, NeonRed)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.Warning,
+                    contentDescription = null,
+                    tint = NeonRed,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "⚠️ 【重要】音が鳴ってしまう原因と解決策",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = NeonRed
+                )
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "以下の権限がOFFになっていると、OSがカメラシャッター音を強制再生してしまいます。ボタンを押してONにしてください：",
+                fontSize = 11.sp,
+                color = TextPrimary
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+
+            if (!isAccessibilityConnected) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("• ユーザー補助サービス (必須)", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                        Text("純正カメラアプリの起動を検知するために必要", fontSize = 10.sp, color = TextSecondary)
+                    }
+                    Button(
+                        onClick = onOpenAccessibility,
+                        colors = ButtonDefaults.buttonColors(containerColor = NeonRed, contentColor = Color.White),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Text("ONにする", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            if (!hasDndPermission) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("• 通知の管理 / DND権限", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                        Text("システム強制音ストリームを完全遮断するために必要", fontSize = 10.sp, color = TextSecondary)
+                    }
+                    Button(
+                        onClick = onOpenDnd,
+                        colors = ButtonDefaults.buttonColors(containerColor = NeonRed, contentColor = Color.White),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Text("許可する", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            if (!hasMicPermission) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("• マイク権限 (通話ハードウェアロック)", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                        Text("通話保護仕様でスピーカー音を物理遮断するために必要", fontSize = 10.sp, color = TextSecondary)
+                    }
+                    Button(
+                        onClick = onRequestMic,
+                        colors = ButtonDefaults.buttonColors(containerColor = NeonRed, contentColor = Color.White),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Text("許可する", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
         }
     }
 }
