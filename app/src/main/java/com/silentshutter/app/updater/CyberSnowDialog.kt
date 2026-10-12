@@ -433,13 +433,54 @@ fun UpdateAvailableView(
             fontFamily = FontFamily.Monospace
         )
 
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // 📦 次回更新容量バッジ
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .background(Color(0x2200F0FF))
+                .border(1.dp, NeonCyan.copy(alpha = 0.8f), RoundedCornerShape(8.dp))
+                .padding(horizontal = 12.dp, vertical = 5.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "📦 次回更新容量: ",
+                    fontSize = 12.sp,
+                    color = TextSecondary
+                )
+                Text(
+                    text = release.apkSize,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = NeonCyan,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
+        }
+
         Spacer(modifier = Modifier.height(14.dp))
+
+        // 日本語更新内容ヘッダー
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "📝 日本語更新内容",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextPrimary
+            )
+        }
+
+        Spacer(modifier = Modifier.height(6.dp))
 
         // Release notes box
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(130.dp)
+                .height(140.dp)
                 .clip(RoundedCornerShape(12.dp))
                 .background(CyberBg)
                 .border(1.dp, Color(0x3300F0FF), RoundedCornerShape(12.dp))
@@ -452,11 +493,12 @@ fun UpdateAvailableView(
                     fontSize = 13.sp,
                     color = NeonCyan
                 )
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(6.dp))
                 Text(
                     text = release.notes,
                     fontSize = 11.sp,
-                    color = TextSecondary
+                    color = TextPrimary,
+                    lineHeight = 16.sp
                 )
             }
         }

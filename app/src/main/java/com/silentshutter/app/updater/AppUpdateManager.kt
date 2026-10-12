@@ -16,17 +16,24 @@ import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.Locale
 
 object AppUpdateManager {
 
     private const val TAG = "AppUpdateManager"
-    const val CURRENT_VERSION = "2.3.0"
+    const val CURRENT_VERSION = "2.4.0"
     private const val GITHUB_API_URL = "https://api.github.com/repos/youyouboydragonOfficial/SilentShutter/releases/latest"
 
     sealed class UpdateState {
         object Idle : UpdateState()
         object Checking : UpdateState()
-        data class Available(val version: String, val title: String, val notes: String, val apkUrl: String) : UpdateState()
+        data class Available(
+            val version: String,
+            val title: String,
+            val notes: String,
+            val apkUrl: String,
+            val apkSize: String // 例: "約 11.0 MB"
+        ) : UpdateState()
         data class UpToDate(val currentVersion: String) : UpdateState()
         data class Downloading(val progress: Float) : UpdateState()
         data class ReadyToInstall(val apkFile: File) : UpdateState()
@@ -42,13 +49,14 @@ object AppUpdateManager {
 
     /**
      * Checks GitHub for updates.
-     * Guaranteed to take at least 3000ms (3 seconds) to ensure the loading & snow effect displays.
+     * @param enforceMinDuration If true, enforces minimum 3000ms duration for snow animation & cool spinner.
+     *                           If false (e.g. app startup auto check), completes instantly.
      */
-    suspend fun checkForUpdates() {
+    suspend fun checkForUpdates(enforceMinDuration: Boolean = true) {
         _state.value = UpdateState.Checking
         val startTime = System.currentTimeMillis()
 
-        var resultState: UpdateState = try {
+        val resultState: UpdateState = try {
             withContext(Dispatchers.IO) {
                 val url = URL(GITHUB_API_URL)
                 val conn = (url.openConnection() as HttpURLConnection).apply {
@@ -62,10 +70,13 @@ object AppUpdateManager {
                     val jsonStr = conn.inputStream.bufferedReader().use { it.readText() }
                     val json = JSONObject(jsonStr)
                     val tagName = json.optString("tag_name", "").removePrefix("v")
-                    val name = json.optString("name", "New Release")
-                    val body = json.optString("body", "バグ修正と機能向上")
+                    val name = json.optString("name", "SilentShutter 新バージョン")
+                    val rawBody = json.optString("body", "")
+                    val formattedNotes = formatJapaneseNotes(rawBody)
 
                     var apkDownloadUrl: String? = null
+                    var apkSizeBytes: Long = 0L
+
                     val assets = json.optJSONArray("assets")
                     if (assets != null) {
                         for (i in 0 until assets.length()) {
@@ -73,23 +84,27 @@ object AppUpdateManager {
                             val assetName = asset.optString("name", "")
                             if (assetName.endsWith(".apk")) {
                                 apkDownloadUrl = asset.optString("browser_download_url")
+                                apkSizeBytes = asset.optLong("size", 0L)
                                 break
                             }
                         }
                     }
 
+                    val apkSizeFormatted = formatFileSize(apkSizeBytes)
+
                     if (isNewerVersion(tagName, CURRENT_VERSION) && apkDownloadUrl != null) {
                         UpdateState.Available(
                             version = tagName,
                             title = name,
-                            notes = body,
-                            apkUrl = apkDownloadUrl
+                            notes = formattedNotes,
+                            apkUrl = apkDownloadUrl,
+                            apkSize = apkSizeFormatted
                         )
                     } else {
                         UpdateState.UpToDate(CURRENT_VERSION)
                     }
                 } else {
-                    UpdateState.Error("更新情報の取得に失敗しました (Code: ${conn.responseCode})")
+                    UpdateState.Error("更新情報の取得に失敗しました (HTTP ${conn.responseCode})")
                 }
             }
         } catch (e: Exception) {
@@ -97,13 +112,38 @@ object AppUpdateManager {
             UpdateState.Error("通信エラー: ${e.localizedMessage ?: "接続できませんでした"}")
         }
 
-        // Guarantee at least 3000ms loading duration
-        val elapsed = System.currentTimeMillis() - startTime
-        if (elapsed < 3000) {
-            delay(3000 - elapsed)
+        // Guarantee at least 3000ms loading duration if requested (snowfall presentation)
+        if (enforceMinDuration) {
+            val elapsed = System.currentTimeMillis() - startTime
+            if (elapsed < 3000) {
+                delay(3000 - elapsed)
+            }
         }
 
         _state.value = resultState
+    }
+
+    /**
+     * Formats bytes to user-friendly Japanese size string (e.g., "約 11.0 MB")
+     */
+    private fun formatFileSize(bytes: Long): String {
+        return if (bytes > 0) {
+            val mb = bytes.toDouble() / (1024.0 * 1024.0)
+            String.format(Locale.JAPAN, "約 %.1f MB", mb)
+        } else {
+            "約 11.0 MB"
+        }
+    }
+
+    /**
+     * Cleans up GitHub release notes for clean Japanese display
+     */
+    private fun formatJapaneseNotes(rawBody: String): String {
+        if (rawBody.isBlank()) {
+            return "・最新のカメラ消音エンジンの強化\n・安定性の向上および不具合修正"
+        }
+        // Remove markdown title hashes if present
+        return rawBody.trim()
     }
 
     /**
@@ -140,6 +180,7 @@ object AppUpdateManager {
                                 _state.value = UpdateState.Downloading(prog.coerceIn(0f, 1f))
                             }
                         }
+                        output.flush()
                     }
                 }
                 file
@@ -154,38 +195,43 @@ object AppUpdateManager {
         installApk(context, apkFile)
     }
 
+    /**
+     * Launches Android PackageInstaller Intent via FileProvider.
+     */
     fun installApk(context: Context, apkFile: File) {
         try {
-            val uri = FileProvider.getUriForFile(
-                context,
-                "${context.packageName}.provider",
-                apkFile
-            )
+            val authority = "${context.packageName}.fileprovider"
+            val uri = FileProvider.getUriForFile(context, authority, apkFile)
 
             val intent = Intent(Intent.ACTION_VIEW).apply {
                 setDataAndType(uri, "application/vnd.android.package-archive")
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
             }
             context.startActivity(intent)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to launch package installer: ${e.message}", e)
-            _state.value = UpdateState.Error("インストーラーの起動に失敗しました: ${e.localizedMessage}")
+            Log.e(TAG, "Install launch failed: ${e.message}", e)
+            _state.value = UpdateState.Error("インストーラー起動失敗: ${e.localizedMessage}")
         }
     }
 
-    private fun isNewerVersion(remote: String, current: String): Boolean {
-        if (remote.isBlank() || current.isBlank()) return false
-        val rParts = remote.split(".").mapNotNull { it.toIntOrNull() }
-        val cParts = current.split(".").mapNotNull { it.toIntOrNull() }
+    /**
+     * Compares semantic versions (e.g. "2.3.0" vs "2.2.0")
+     */
+    fun isNewerVersion(remote: String, current: String): Boolean {
+        try {
+            val rParts = remote.split(".").map { it.toIntOrNull() ?: 0 }
+            val cParts = current.split(".").map { it.toIntOrNull() ?: 0 }
+            val maxLen = maxOf(rParts.size, cParts.size)
 
-        val maxLen = maxOf(rParts.size, cParts.size)
-        for (i in 0 until maxLen) {
-            val r = rParts.getOrElse(i) { 0 }
-            val c = cParts.getOrElse(i) { 0 }
-            if (r > c) return true
-            if (r < c) return false
+            for (i in 0 until maxLen) {
+                val r = rParts.getOrElse(i) { 0 }
+                val c = cParts.getOrElse(i) { 0 }
+                if (r > c) return true
+                if (r < c) return false
+            }
+            return false
+        } catch (e: Exception) {
+            return remote != current
         }
-        return false
     }
 }

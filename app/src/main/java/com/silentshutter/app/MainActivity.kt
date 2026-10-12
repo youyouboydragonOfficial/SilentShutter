@@ -90,6 +90,7 @@ import com.silentshutter.app.hack.ShizukuSystemHacker
 import com.silentshutter.app.manager.ShutterMuteManager
 import com.silentshutter.app.service.FloatingHudService
 import com.silentshutter.app.updater.CyberSnowUpdateDialog
+import com.silentshutter.app.updater.AppUpdateManager
 import com.silentshutter.app.ui.theme.CyberBg
 import com.silentshutter.app.ui.theme.CyberCard
 import com.silentshutter.app.ui.theme.CyberCardBorder
@@ -239,11 +240,23 @@ fun MainDashboardScreen(
     var showAddPkgDialog by remember { mutableStateOf(false) }
     var showTargetList by remember { mutableStateOf(false) }
     var showUpdateDialog by remember { mutableStateOf(false) }
+    val updateState by AppUpdateManager.state.collectAsState()
+
+    // 新バージョンが見つかったら、自動的に更新ダイアログをオープン
+    LaunchedEffect(updateState) {
+        if (updateState is AppUpdateManager.UpdateState.Available) {
+            showUpdateDialog = true
+        }
+    }
 
     LaunchedEffect(Unit) {
         hasDndPermission = ShutterMuteManager.hasDndPermission()
         hasMicPermission = ShutterMuteManager.hasRecordAudioPermission()
         ShizukuSystemHacker.checkShizukuState()
+
+        // アプリ起動時にバックグラウンドで自動更新確認
+        kotlinx.coroutines.delay(800)
+        AppUpdateManager.checkForUpdates(enforceMinDuration = false)
     }
 
     Surface(
@@ -383,7 +396,7 @@ fun MainDashboardScreen(
             item {
                 Spacer(modifier = Modifier.height(20.dp))
                 Text(
-                    text = "SilentShutter v2.3.0 • Default Camera Shutter Hacker",
+                    text = "SilentShutter v2.4.0 • Default Camera Shutter Hacker",
                     color = TextMuted,
                     fontSize = 12.sp,
                     textAlign = TextAlign.Center,
