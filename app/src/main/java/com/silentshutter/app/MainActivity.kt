@@ -73,6 +73,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -123,11 +124,11 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             SilentShutterTheme {
-                var isSplashFinished by remember { mutableStateOf(false) }
+                var isSplashFinished by rememberSaveable { mutableStateOf(false) }
 
                 Crossfade(
                     targetState = isSplashFinished,
-                    animationSpec = tween(400),
+                    animationSpec = tween(150),
                     label = "SplashCrossfade"
                 ) { finished ->
                     if (!finished) {
@@ -407,7 +408,7 @@ fun MainDashboardScreen(
             item {
                 Spacer(modifier = Modifier.height(20.dp))
                 Text(
-                    text = "SilentShutter v2.6.0 • Default Camera Shutter Hacker",
+                    text = "SilentShutter v2.7.0 • Default Camera Shutter Hacker",
                     color = TextMuted,
                     fontSize = 12.sp,
                     textAlign = TextAlign.Center,
@@ -1132,7 +1133,7 @@ fun AlwaysForceMuteCard(
                 Spacer(modifier = Modifier.width(8.dp))
                 Switch(
                     checked = isAlwaysForceMute,
-                    onCheckedChange = onToggle,
+                    onCheckedChange = null,
                     colors = SwitchDefaults.colors(
                         checkedThumbColor = NeonGreen,
                         checkedTrackColor = NeonGreen.copy(alpha = 0.4f),
@@ -1212,21 +1213,18 @@ fun HibernateControlCard(
                     }
                 }
 
-                Button(
-                    onClick = {
-                        if (isHibernated) onWakeUp() else onShutdown()
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (isHibernated) NeonGreen else NeonRed.copy(alpha = 0.3f),
-                        contentColor = if (isHibernated) Color.Black else NeonRed
-                    ),
-                    shape = RoundedCornerShape(12.dp),
-                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(if (isHibernated) NeonGreen else NeonRed.copy(alpha = 0.25f))
+                        .border(1.dp, if (isHibernated) NeonGreen else NeonRed, RoundedCornerShape(12.dp))
+                        .padding(horizontal = 14.dp, vertical = 8.dp)
                 ) {
                     Text(
                         text = if (isHibernated) "🟢 再稼働" else "💀 完全休止",
                         fontWeight = FontWeight.Black,
-                        fontSize = 12.sp
+                        fontSize = 12.sp,
+                        color = if (isHibernated) Color.Black else NeonRed
                     )
                 }
             }

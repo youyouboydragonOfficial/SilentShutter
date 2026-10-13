@@ -189,12 +189,14 @@ object AudioRoutingHijacker {
     /**
      * Mutes every audio stream, explicitly targeting STREAM_SYSTEM_ENFORCED (7).
      */
-    fun muteAllStreams() {
+    fun muteAllStreams(force: Boolean = true) {
         for (stream in ALL_AUDIO_STREAMS) {
             try {
-                audioManager.setStreamVolume(stream, 0, 0)
-                audioManager.adjustStreamVolume(stream, AudioManager.ADJUST_MUTE, 0)
-                setStreamMuteMethod?.invoke(audioManager, stream, true)
+                if (force || audioManager.getStreamVolume(stream) > 0) {
+                    audioManager.setStreamVolume(stream, 0, 0)
+                    audioManager.adjustStreamVolume(stream, AudioManager.ADJUST_MUTE, 0)
+                    setStreamMuteMethod?.invoke(audioManager, stream, true)
+                }
             } catch (_: Exception) {}
         }
     }
@@ -386,7 +388,7 @@ object AudioRoutingHijacker {
                     try {
                         silentTrack?.write(silentData, 0, silentData.size)
                         sonificationTrack?.write(silentData, 0, silentData.size)
-                        delay(20)
+                        delay(150)
                     } catch (_: Exception) {
                         break
                     }
@@ -416,27 +418,42 @@ object AudioRoutingHijacker {
     }
 
     /**
-     * Ultra-fast guard loop (every 25ms) that prevents camera apps from stealing back
-     * audio modes or DAC volumes.
+     * Highly optimized, smooth guard loop that preserves mute state
+     * without saturating Android's Binder IPC bus or freezing user touches.
      */
-    private fun startVolumeGuard() {
+    fun startVolumeGuard(isCameraActive: Boolean = true) {
         volumeGuardJob?.cancel()
         volumeGuardJob = scope.launch {
             while (isActive && isCurrentlyHijacked) {
                 try {
-                    muteAllStreams()
+                    muteAllStreams(force = false)
                     applyMasterDacMute(true)
-                    if (audioManager.mode != AudioManager.MODE_IN_COMMUNICATION) {
-                        audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+                    if (isCameraActive) {
+                        if (audioManager.mode != AudioManager.MODE_IN_COMMUNICATION) {
+                            audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+                        }
+                        if (audioManager.isSpeakerphoneOn) {
+                            audioManager.isSpeakerphoneOn = false
+                        }
                     }
-                    if (audioManager.isSpeakerphoneOn) {
-                        audioManager.isSpeakerphoneOn = false
-                    }
-                    routeToEarpiece()
                 } catch (_: Exception) {}
-                delay(25)
+                delay(300)
             }
         }
+    }
+
+    /**
+     * Releases call mode and earpiece routing.
+     * Allows normal screen auto-sleep/timeout and stops proximity sensor interference.
+     */
+    fun releaseCallModeAndEarpiece() {
+        try {
+            audioManager.mode = AudioManager.MODE_NORMAL
+            audioManager.isSpeakerphoneOn = false
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                audioManager.clearCommunicationDevice()
+            }
+        } catch (_: Exception) {}
     }
 
     /**

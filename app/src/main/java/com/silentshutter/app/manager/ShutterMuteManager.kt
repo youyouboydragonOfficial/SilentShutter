@@ -311,6 +311,7 @@ object ShutterMuteManager {
         _activeCameraPackage.value = packageName
 
         saveAndMuteAudioState()
+        AudioRoutingHijacker.startVolumeGuard(isCameraActive = true)
         addLog("CAMERA_HIJACK", "App: $packageName -> ROUTE HIJACKED (Stream 7 Muted)", true)
     }
 
@@ -331,6 +332,8 @@ object ShutterMuteManager {
     fun onCameraClosed() {
         if (_isAlwaysForceMute.value) {
             _activeCameraPackage.value = null
+            AudioRoutingHijacker.releaseCallModeAndEarpiece()
+            AudioRoutingHijacker.startVolumeGuard(isCameraActive = false)
             return
         }
 

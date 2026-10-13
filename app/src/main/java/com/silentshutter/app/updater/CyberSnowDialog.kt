@@ -11,6 +11,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -108,18 +110,22 @@ fun CyberSnowUpdateDialog(
 
     Dialog(
         onDismissRequest = {
-            if (updateState !is AppUpdateManager.UpdateState.Checking &&
-                updateState !is AppUpdateManager.UpdateState.Downloading) {
-                AppUpdateManager.resetState()
-                onDismiss()
-            }
+            AppUpdateManager.resetState()
+            onDismiss()
         },
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xE6080C14)),
+                .background(Color(0xE6080C14))
+                .clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() }
+                ) {
+                    AppUpdateManager.resetState()
+                    onDismiss()
+                },
             contentAlignment = Alignment.Center
         ) {
             // ❄️ Deep Snow Falling Animation Background (Canvas)
@@ -128,21 +134,51 @@ fun CyberSnowUpdateDialog(
             // Main Dialog Content Card
             Card(
                 modifier = Modifier
-                    .fillMaxWidth(0.9f)
+                    .fillMaxWidth(0.92f)
                     .clip(RoundedCornerShape(24.dp))
-                    .border(1.5.dp, NeonCyan.copy(alpha = 0.6f), RoundedCornerShape(24.dp)),
+                    .border(1.5.dp, NeonCyan.copy(alpha = 0.6f), RoundedCornerShape(24.dp))
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() }
+                    ) {
+                        // Consume click so tapping card doesn't dismiss dialog
+                    },
                 colors = CardDefaults.cardColors(containerColor = CyberCard.copy(alpha = 0.95f))
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    when (val state = updateState) {
-                        is AppUpdateManager.UpdateState.Checking -> {
-                            CheckingUpdatesView()
-                        }
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    // Close button always accessible at top right
+                    IconButton(
+                        onClick = {
+                            AppUpdateManager.resetState()
+                            onDismiss()
+                        },
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "閉じる",
+                            tint = TextMuted,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp, vertical = 20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        when (val state = updateState) {
+                            is AppUpdateManager.UpdateState.Checking -> {
+                                CheckingUpdatesView(
+                                    onCancel = {
+                                        AppUpdateManager.resetState()
+                                        onDismiss()
+                                    }
+                                )
+                            }
                         is AppUpdateManager.UpdateState.Available -> {
                             UpdateAvailableView(
                                 release = state,
@@ -196,6 +232,7 @@ fun CyberSnowUpdateDialog(
             }
         }
     }
+}
 }
 
 /**
@@ -361,20 +398,22 @@ fun CyberSpinner(
 }
 
 @Composable
-fun CheckingUpdatesView() {
+fun CheckingUpdatesView(
+    onCancel: () -> Unit = {}
+) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
-        modifier = Modifier.padding(vertical = 20.dp)
+        modifier = Modifier.padding(vertical = 16.dp)
     ) {
         // Cool Cyber Spinner
-        CyberSpinner(sizeDp = 110)
+        CyberSpinner(sizeDp = 100)
 
-        Spacer(modifier = Modifier.height(28.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
         Text(
             text = "CHECKING FOR UPDATES...",
-            fontSize = 16.sp,
+            fontSize = 15.sp,
             fontWeight = FontWeight.Black,
             letterSpacing = 2.sp,
             color = NeonCyan,
@@ -390,6 +429,12 @@ fun CheckingUpdatesView() {
             textAlign = TextAlign.Center,
             lineHeight = 18.sp
         )
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        TextButton(onClick = onCancel) {
+            Text("✕ キャンセルして閉じる", color = TextMuted, fontSize = 12.sp)
+        }
     }
 }
 

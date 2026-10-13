@@ -28,57 +28,80 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+
 /**
  * Unity / ゲームスタジオ起動風 スプラッシュ画面
- * ゆっくり点灯（Fade In）し、ゆっくり消灯（Fade Out）してメイン画面へシームレスに遷移する。
- * 全体所要時間: 約2.6秒（「5秒以内に起動してほしい」の要件を確実に満たす）。
- * 画面タップによる即時スキップにも対応。
+ * 高速かつ滑らかな点灯（Fade In 350ms）→ 鑑賞（250ms）→ 消灯（Fade Out 300ms）。
+ * 画面タップで0秒即時スキップ。
+ * セーフティタイマー（1200ms）により画面が消えない・固まる不具合を物理防止。
  */
 @Composable
 fun UnitySplashScreen(
     onSplashFinished: () -> Unit
 ) {
+    var hasFinished by remember { mutableStateOf(false) }
+
+    fun finishSplash() {
+        if (!hasFinished) {
+            hasFinished = true
+            onSplashFinished()
+        }
+    }
+
     val alphaAnim = remember { Animatable(0f) }
-    val scaleAnim = remember { Animatable(0.95f) }
+    val scaleAnim = remember { Animatable(0.96f) }
 
+    // メインアニメーションフロー (合計約900msでスピーディに完了)
     LaunchedEffect(Unit) {
-        // 1. ゆっくり点灯・フェードイン (1000ms)
-        coroutineScope {
-            launch {
-                scaleAnim.animateTo(
-                    targetValue = 1.0f,
-                    animationSpec = tween(durationMillis = 1000, easing = LinearOutSlowInEasing)
-                )
+        try {
+            // 1. スムーズ点灯・フェードイン (350ms)
+            coroutineScope {
+                launch {
+                    scaleAnim.animateTo(
+                        targetValue = 1.0f,
+                        animationSpec = tween(durationMillis = 350, easing = LinearOutSlowInEasing)
+                    )
+                }
+                launch {
+                    alphaAnim.animateTo(
+                        targetValue = 1.0f,
+                        animationSpec = tween(durationMillis = 350, easing = LinearOutSlowInEasing)
+                    )
+                }
             }
-            launch {
-                alphaAnim.animateTo(
-                    targetValue = 1.0f,
-                    animationSpec = tween(durationMillis = 1000, easing = LinearOutSlowInEasing)
-                )
+
+            // 2. スタジオロゴ静止鑑賞時間 (250ms)
+            delay(250)
+
+            // 3. スムーズ消灯・フェードアウト (300ms)
+            coroutineScope {
+                launch {
+                    scaleAnim.animateTo(
+                        targetValue = 1.03f,
+                        animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing)
+                    )
+                }
+                launch {
+                    alphaAnim.animateTo(
+                        targetValue = 0f,
+                        animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing)
+                    )
+                }
             }
+        } catch (_: Exception) {
+            // 例外やキャンセル時も確実にスキップ
+        } finally {
+            finishSplash()
         }
+    }
 
-        // 2. スタジオロゴ静止鑑賞時間 (700ms)
-        delay(700)
-
-        // 3. ゆっくり消灯・フェードアウト (900ms)
-        coroutineScope {
-            launch {
-                scaleAnim.animateTo(
-                    targetValue = 1.04f,
-                    animationSpec = tween(durationMillis = 900, easing = FastOutSlowInEasing)
-                )
-            }
-            launch {
-                alphaAnim.animateTo(
-                    targetValue = 0f,
-                    animationSpec = tween(durationMillis = 900, easing = FastOutSlowInEasing)
-                )
-            }
-        }
-
-        // 4. メイン画面起動へコールバック (合計約2.6秒で完全起動)
-        onSplashFinished()
+    // 🔒 セーフティタイムアウト: 最大1200ms経過で強制的にメイン画面へ遷移（画面が残る問題を徹底防止）
+    LaunchedEffect(Unit) {
+        delay(1200)
+        finishSplash()
     }
 
     Box(
@@ -89,8 +112,8 @@ fun UnitySplashScreen(
                 indication = null,
                 interactionSource = remember { MutableInteractionSource() }
             ) {
-                // タップで即座にスキップして起動可能
-                onSplashFinished()
+                // 画面タップで即座に0秒スキップして即起動
+                finishSplash()
             },
         contentAlignment = Alignment.Center
     ) {
